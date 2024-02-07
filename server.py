@@ -19,34 +19,18 @@ def handle_client(client_socket):
             if not message:
                 break
             #------Obtention du port, du methode et de la adresse host------
-            host_web, port_web, request =  extract_port_host_method(message,data)
-            print(f"{host_web}:{port_web}")
+            host_web, port_web, request =  extract_port_host_method_request(message,data)
+            
+            # handle_destination_server(host_web, port_web, request, client_socket)
         
-            #-----Connection du client au serveur cible-----
-        # destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # destination_server.connect((host_web, port_web))           
             
-        #     #Send request to server
-        # destination_server.sendall(request)
-            
-        #     #Receive data from destinatin server
-        # while True:
-        #     response = destination_server.recv(1024)
-        #     print(f"[RESPONSE]{response.decode('utf-8')}")
-        #         #Check if data has a content
-        #     if len(data) > 0:
-        #             #send the response to the client
-        #         client_socket.send(response)
-        #     else:
-        #         break
-        # destination_server.close()
         client_socket.close()
     except ConnectionResetError:
         print("[ERROR] Connection error")
 
 
-#-------------METHODE-PORT-HOST--------------
-def extract_port_host_method(message,data):
+#-------------METHOD-PORT-HOST--------------
+def extract_port_host_method_request(message,data):
     request = data + message
     message_ = message.decode('utf-8')
     message_ = message_.split("\n")
@@ -73,15 +57,24 @@ def extract_port_host_method(message,data):
     if port_web[1] != '443':
         port_web = 80
     else:
-        port_web = int(port_web[1])        
-    
+        port_web = int(port_web[1])  
+        #------Extracting the host request------      
+ 
+    request_host = str(message).split(" ")
+    request_host = request_host[2] + request_host[3]
+    request_host = request_host.strip("\r")
+    print(request_host)
+
     return host_web, port_web, request
+            
+
+
 
 #-------------Starting proxy------------------
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host,port))
-    server.listen(10)
+    server.listen(1)
     while True:
         try:
             client_socket, client_addr = server.accept()
@@ -89,5 +82,26 @@ def start():
             threading.Thread(target=handle_client, args=(client_socket,)).start()
         except ConnectionResetError:
             print("[ERROR] Connection reset")
+
+#-----Connection du client au serveur cible-----
+# def handle_destination_server(host_web, port_web,request,client_socket):
+    destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    destination_server.connect(('93.184.216.34', 80))           
+    
+            #Send request to server
+    destination_server.sendall(b"GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n")
+                                #      HTTP/1.1\r\nHost: www.example.com\r\n
+            #Receive data from destination server
+    while True:
+        response = destination_server.recv(1024)
+        print(f"[RESPONSE]{response.decode('utf-8')}")
+            #Check if data has a content
+        if len(response) > 0:
+                    #send the response to the client
+            client_socket.send(response)
+        else:
+            break    
+
+    destination_server.close()
 
 start()
