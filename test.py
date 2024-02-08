@@ -425,7 +425,7 @@
 
 # import socket
 
-# hostname = 'www.example.com'
+# hostname = 'www.example.com\r'
 # ip = socket.gethostbyname(hostname)
 
 # print(f'The host name is: {hostname}, its IP is: {ip}')
@@ -456,8 +456,26 @@
 # # Print the response
 # print(response.text)
 
-import requests
+# import socket
 
-response = requests.get('https://www.example.com')
-print(f'Status code: {response.status_code}')
-print(f'Content: {response.text}')
+# val = "HTTP/1.1\r\nHost:www.google.com:443\r\nProxy-Connection:"
+# check = '\\'
+# val= val.split('\r\n')
+# x = val[1].split(':4')[0]
+# val = val[0] + r'\r\n' + x + r'\r\n\r\n'
+# print(val)
+
+# input = 'HTTP/1.1\\r\\nHost:mobile.events.data.microsoft.com:443\\r\\nProxy-Connection:'
+# val = "HTTP/1.1\r\nHost:www.google.com:443\r\nProxy-Connection:"
+
+# check = "\\"
+
+# if check in val :
+#     print("GG")
+# else: 
+#     print("Not GG")
+
+val = 'ajifv,pkr\\v sd;l'
+val = val.split('v')
+val = val[0] + r'\r\n' + val[1] +  r'\r\n'
+print(val)
