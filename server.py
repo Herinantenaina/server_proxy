@@ -1,7 +1,7 @@
 import socket
-import requests
+import ssl
 import threading
-from urllib.parse import urlparse
+
 #host = socket.gethostbyname(socket.gethostname())
 host = '127.0.0.1'
 print(host)
@@ -17,7 +17,7 @@ def handle_client(client_socket):
         
             if not message:
                 break
-            #------Obtention du port, du methode et de la adresse host------
+            #------Obtention du port, du methode et de l'adresse host------
             host_web, port_web, request_host =  extract_port_host_method_request(message)
             
             handle_destination_server(host_web, port_web, request_host, client_socket)
@@ -100,16 +100,20 @@ def start():
 
 #-----Connection du client au serveur cible-----
 def handle_destination_server(host_web, port_web,request_host,client_socket):
+    #Tsy maintsy ampiasaina pour les https websites
+    context = ssl.create_default_context()
     destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    destination_server.connect(('93.184.216.34', 80))           
-    
+    wrapped_server = context.wrap_socket(destination_server, server_hostname= '93.184.216.34')
+    wrapped_server.connect(('93.184.216.34', 80))           
+                          # '104.18.40.186'  hostinger.co.id
+            
             #Send request to server
-    destination_server.sendall(b'GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n')
+    wrapped_server.sendall(b'GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n')
                                 # GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n
                                 #      HTTP/1.1\r\nHost: www.example.com\r\n
             #Receive data from destination server
     while True:
-        response = destination_server.recv(1024)
+        response = wrapped_server.recv(1024)
         print(f"[RESPONSE]{response.decode('utf-8')}")
             #Check if data has a content
         if len(response) > 0:
@@ -118,6 +122,6 @@ def handle_destination_server(host_web, port_web,request_host,client_socket):
         else:
             break    
 
-    destination_server.close()
+    wrapped_server.close()
 
 start()
