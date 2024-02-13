@@ -1,11 +1,12 @@
 import requests
 
 proxie = {
-    # 'https': 'https://52.183.8.192:3128'
-    'https': 'https://117.250.3.58:8080',
+     'https': 'https://103.148.57.103:30005'
+    # 'http': 'https://192.46.233.69:8090',
     # 'https': 'https://41.204.63.118:80'
-    # 'https': 'https://185.139.56.133:6961'
-    # 'https': 'https://72.10.164.178:10801'
+    # 'https': 'https://185.139.56.133:6961'    hostinger.co.id
+    # 'https': 'https://72.10.164.178:10801' https://free-proxy-list.net
 }
-response = requests.get("https://ipinfo.io/json", proxies= proxie)
+response = requests.get("https://hostinger.co.id", proxies= proxie) 
 print(response.text)
+
