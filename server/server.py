@@ -4,7 +4,6 @@ import threading
 
 #host = socket.gethostbyname(socket.gethostname())
 host = '127.0.0.1'
-print(host)
 port = 8080
 
 
@@ -20,7 +19,7 @@ def handle_client(client_socket):
             #------Obtention du port, du methode et de l'adresse host------
             host_web, port_web, request_host =  extract_port_host_method_request(message)
             
-            handle_destination_server(host_web, port_web, request_host, client_socket)
+            # handle_destination_server(host_web, port_web, request_host, client_socket)
         
             
         client_socket.close()
@@ -28,7 +27,7 @@ def handle_client(client_socket):
         print("[ERROR] Connection error")
 
 
-#-------------METHOD-PORT-HOST--------------
+#-------------METHOD-PORT-HOST-REQUEST--------------
 def extract_port_host_method_request(message):
     message_ = message.decode('utf-8')
     message_ = message_.split("\n")
@@ -59,35 +58,18 @@ def extract_port_host_method_request(message):
         port_web = int(port_web[1])  
 
         #------Extracting the host request------      
-    request_host = str(message).split(" ")
-    request_host = request_host[2] + request_host[3]
-    request_host = request_host.strip("\r")
-    check = '\\'
-    if check in request_host:
-        request_host = request_host.split("\\r\\n")
-        tmp = request_host[1].split(':4')[0]
-        request_host = request_host[0] + r'\r\n' + tmp + r'\r\n\r\n'
-        request_host = request_host.replace('\\\\', '\\')
-    else:
-        request_host = request_host.split("\r\n")
-        tmp = request_host[1].split(':4')[0]
-        request_host = request_host[0] + r'\r\n' + tmp + r'\r\n\r\n'
-        request_host = request_host.replace('\\\\', '\\')
-    
+    request_host = _get(message)
     request_host = method + ' / ' + request_host
     request_host = request_host.encode('utf-8')
     print(request_host)
-
     return host_web, port_web, request_host
-            
-
-
+        
 
 #-------------Starting proxy------------------
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host,port))
-    server.listen(1)
+    server.listen(5)
     while True:
         try:
             client_socket, client_addr = server.accept()
@@ -101,19 +83,20 @@ def start():
 #-----Connection du client au serveur cible-----
 def handle_destination_server(host_web, port_web,request_host,client_socket):
     #Tsy maintsy ampiasaina pour les https websites
-    context = ssl.create_default_context()
+    # context = ssl.create_default_context()
+    # context.verify_mode = ssl.CERT_NONE
     destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    wrapped_server = context.wrap_socket(destination_server, server_hostname= '93.184.216.34')
-    wrapped_server.connect(('93.184.216.34', 80))           
+    # wrapped_server = context.wrap_socket(destination_server, server_hostname= '93.184.216.34')
+    destination_server.connect(('93.184.216.34', 80))           
                           # '104.18.40.186'  hostinger.co.id
             
             #Send request to server
-    wrapped_server.sendall(b'GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n')
+    destination_server.sendall(b'GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n')
                                 # GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n
                                 #      HTTP/1.1\r\nHost: www.example.com\r\n
             #Receive data from destination server
     while True:
-        response = wrapped_server.recv(1024)
+        response = destination_server.recv(1024)
         print(f"[RESPONSE]{response.decode('utf-8')}")
             #Check if data has a content
         if len(response) > 0:
@@ -122,6 +105,40 @@ def handle_destination_server(host_web, port_web,request_host,client_socket):
         else:
             break    
 
-    wrapped_server.close()
+    destination_server.close()
+
+
+#-------GET--------
+def _get(message):
+    request_host = str(message).split(" ")
+    request_host = request_host[2] + request_host[3]
+    request_host = request_host.strip("\r")
+    check = '\\'
+    if check in request_host:
+        request_host = request_host.split("\\r\\n")
+        tmp = request_host[1].split(':4')[0]
+        request_host = request_host[0] + r'\r\n' + tmp + r'\r\n\r\n' + 'Connection: close' + r'\r\n\r\n'
+        request_host = request_host.replace('\\\\', '\\')
+    else:
+        request_host = request_host.split("\r\n")
+        tmp = request_host[1].split(':4')[0]
+        request_host = request_host[0] + r'\r\n' + tmp + r'\r\n\r\n' + 'Connection: close' + r'\r\n\r\n'
+        request_host = request_host.replace('\\\\', '\\')
+    return request_host
+#------CONNECT---------
+def _connect():
+    pass
+
+#-----POST------
+def _post():
+    pass
+
+#-----DELETE-----
+def _delete():
+    pass
+
+#----PUT----
+def _put():
+ pass
 
 start()
