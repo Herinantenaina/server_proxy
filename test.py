@@ -475,7 +475,26 @@
 # else: 
 #     print("Not GG")
 
-val = 'ajifv,pkr\\v sd;l'
-val = val.split('v')
-val = val[0] + r'\r\n' + val[1] +  r'\r\n'
-print(val)
+# val = 'ajifv,pkr\\v sd;l'
+# val = val.split('v')
+# val = val[0] + r'\r\n' + val[1] +  r'\r\n'
+# print(val)
+
+import socket
+
+request = "CONNECT www.example.com:443 HTTP/1.1\r\nHost: www.example.com\r\n\r\n"
+
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client_socket.connect(("www.example.com", 443))
+client_socket.send(request.encode("utf-8"))
+
+response = b""
+while True:
+    data = client_socket.recv(4096)
+    if not data:
+        break
+    response += data
+
+print(response.decode("utf-8"))
+
+client_socket.close()
