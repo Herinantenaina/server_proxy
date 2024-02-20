@@ -1,6 +1,7 @@
 import socket
 import ssl
 import threading
+import requests
 
 #host = socket.gethostbyname(socket.gethostname())
 host = '127.0.0.1'
@@ -13,14 +14,11 @@ def handle_client(client_socket):
         # client_socket.setblocking(False)
         while True:
             message = client_socket.recv(1024)
-        
             if not message:
                 break
             #------Obtention du port, du methode et de l'adresse host------
-            host_web, port_web, request_host =  extract_port_host_method_request(message)
-            
-            # handle_destination_server(host_web, port_web, request_host, client_socket)
-        
+            host_web, port_web, method =  extract_port_host_method_request(message)
+            handle_destination_server(host_web, port_web,client_socket,method) 
             
         client_socket.close()
     except ConnectionResetError:
@@ -31,7 +29,7 @@ def handle_client(client_socket):
 def extract_port_host_method_request(message):
     message_ = message.decode('utf-8')
     message_ = message_.split("\n")
-            
+    print(message)        
             #-----Method-----
     method = message_[0]
     method = method.split(" ")
@@ -57,19 +55,26 @@ def extract_port_host_method_request(message):
     else:
         port_web = int(port_web[1])  
 
-        #------Extracting the host request------      
-    request_host = _get(message)
-    request_host = method + ' / ' + request_host
-    request_host = request_host.encode('utf-8')
-    print(request_host)
-    return host_web, port_web, request_host
+        #------Extracting the host request------  
+    # if method == 'GET' : 
+    #     request_host = _get(message)
+    # elif method == 'CONNECT' :
+    #     request_host = _connect(message)
+    # elif method == 'PUT':
+    #     request_host = _put(message)
+    # request_host = _get(message)        
+    # request_host = method + ' / ' + request_host
+    # request_host = request_host.encode('utf-8')
+    # # print(request_host)
+    return host_web, port_web, method
         
 
 #-------------Starting proxy------------------
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host,port))
-    server.listen(5)
+    server.listen(1)
+    print('[SERVER]  The server is on...')
     while True:
         try:
             client_socket, client_addr = server.accept()
@@ -81,32 +86,39 @@ def start():
 
 
 #-----Connection du client au serveur cible-----
-def handle_destination_server(host_web, port_web,request_host,client_socket):
-    #Tsy maintsy ampiasaina pour les https websites
-    # context = ssl.create_default_context()
-    # context.verify_mode = ssl.CERT_NONE
-    destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # wrapped_server = context.wrap_socket(destination_server, server_hostname= '93.184.216.34')
-    destination_server.connect(('93.184.216.34', 80))           
-                          # '104.18.40.186'  hostinger.co.id
-            
-            #Send request to server
-    destination_server.sendall(b'GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n')
-                                # GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n
-                                #      HTTP/1.1\r\nHost: www.example.com\r\n
-            #Receive data from destination server
-    while True:
-        response = destination_server.recv(1024)
-        print(f"[RESPONSE]{response.decode('utf-8')}")
-            #Check if data has a content
-        if len(response) > 0:
-                    #send the response to the client
-            client_socket.send(response)
-        else:
-            break    
+def handle_destination_server(host_web, port_web,client_socket, method):
+    #--Tsy maintsy ampiasaina pour les https websites--
+    try:
+        context = ssl.create_default_context()
+        context.verify_mode = ssl.CERT_NONE
+        context.check_hostname = False
+        destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        wrapped_server = context.wrap_socket(destination_server, server_hostname= '93.184.216.34')
+        wrapped_server.connect(('www.example.com', 80))           
+                            # '104.18.40.186'  hostinger.co.id
+                
+                #Send request to server
+        # if method == 'GET':
+        #     server_response = requests.get('http://www.example.com')
+        if method == 'CONNECT':
+            wrapped_server.sendall(b'CONNECT mobile.events.data.microsoft.com:443 HTTP/1.1\r\nHost: mobile.events.data.microsoft.com:443\r\nProxy-Connection: keep-alive\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Code/1.86.2 Chrome/118.0.5993.159 Electron/27.2.3 Safari/537.36\r\n\r\n')
+                                    # GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n
+                                    #      HTTP/1.1\r\nHost: www.example.com\r\n
+            server_response = wrapped_server.recv(1024)
+                #Receive data from destination server
+        while True:
+            # response = wrapped_server.recv(1024)
+            # print(f"[RESPONSE]{response.decode('utf-8')}")
+                #Check if data has a content
+            if len(server_response) > 0:
+                        #send the server_response to the client
+                client_socket.sendall(server_response)   
+            else:
+                break    
 
-    destination_server.close()
-
+        wrapped_server.close()
+    except Exception as e:
+        print(e)
 
 #-------GET--------
 def _get(message):
@@ -126,19 +138,18 @@ def _get(message):
         request_host = request_host.replace('\\\\', '\\')
     return request_host
 #------CONNECT---------
-def _connect():
+def _connect(message):
     pass
 
 #-----POST------
-def _post():
+def _post(message):
     pass
 
 #-----DELETE-----
-def _delete():
+def _delete(message):
     pass
 
 #----PUT----
-def _put():
+def _put(message):
  pass
-
 start()
