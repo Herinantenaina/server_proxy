@@ -480,21 +480,50 @@
 # val = val[0] + r'\r\n' + val[1] +  r'\r\n'
 # print(val)
 
-import socket
+# import socket
 
-request = "CONNECT www.example.com:443 HTTP/1.1\r\nHost: www.example.com\r\n\r\n"
+# request = "CONNECT www.example.com:443 HTTP/1.1\r\nHost: www.example.com\r\n\r\n"
 
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect(("www.example.com", 443))
-client_socket.send(request.encode("utf-8"))
+# client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# client_socket.connect(("www.example.com", 443))
+# client_socket.send(request.encode("utf-8"))
 
-response = b""
-while True:
-    data = client_socket.recv(4096)
-    if not data:
-        break
-    response += data
+# response = b""
+# while True:
+#     data = client_socket.recv(4096)
+#     if not data:
+#         break
+#     response += data
 
-print(response.decode("utf-8"))
+# print(response.decode("utf-8"))
 
-client_socket.close()
+# client_socket.close()
+
+# import socket
+# import ssl
+# import requests
+
+# Define the host and port
+# HOST = '127.0.0.1'
+# PORT = 8080
+
+# Create a new socket
+# with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#     # Bind the socket to the address and port
+#     s.bind((HOST, PORT))
+#     # Listen for incoming connections
+#     s.listen()
+#     print(f"Server listening on {HOST}:{PORT}")
+    
+#     # Accept a connection
+#     conn, addr = s.accept()
+#     try: 
+#         context = ssl.create_default_context()
+#         context.verify_mode = ssl.CERT_NONE
+#         context.check_hostname = False 
+#         destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#         wrapped_server = context.wrap_socket(destination_server, server_hostname = )
+#     except Exception as e:
+#         print(e)
+#     finally:
+        
