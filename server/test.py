@@ -480,21 +480,76 @@
 # val = val[0] + r'\r\n' + val[1] +  r'\r\n'
 # print(val)
 
-import socket
+# import socket
 
-request = "CONNECT www.example.com:443 HTTP/1.1\r\nHost: www.example.com\r\n\r\n"
+# request = "CONNECT www.example.com:443 HTTP/1.1\r\nHost: www.example.com\r\n\r\n"
 
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect(("www.example.com", 443))
-client_socket.send(request.encode("utf-8"))
+# client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# client_socket.connect(("www.example.com", 443))
+# client_socket.send(request.encode("utf-8"))
 
-response = b""
-while True:
-    data = client_socket.recv(4096)
-    if not data:
-        break
-    response += data
+# response = b""
+# while True:
+#     data = client_socket.recv(4096)
+#     if not data:
+#         break
+#     response += data
 
-print(response.decode("utf-8"))
+# print(response.decode("utf-8"))
 
-client_socket.close()
+# client_socket.close()
+
+# import socket
+# import ssl
+# import requests
+
+# Define the host and port
+# HOST = '127.0.0.1'
+# PORT = 8080
+
+# Create a new socket
+# with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#     # Bind the socket to the address and port
+#     s.bind((HOST, PORT))
+#     # Listen for incoming connections
+#     s.listen()
+#     print(f"Server listening on {HOST}:{PORT}")
+    
+#     # Accept a connection
+#     conn, addr = s.accept()
+#     try: 
+#         context = ssl.create_default_context()
+#         context.verify_mode = ssl.CERT_NONE
+#         context.check_hostname = False 
+#         destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#         wrapped_server = context.wrap_socket(destination_server, server_hostname = )
+#     except Exception as e:
+#         print(e)
+#     finally:
+
+t = 'tay'     
+t = b'' + t.encode()
+print(t)
+
+x = ['afva', 'bvanjo' ,'cavbrzk', 'dacezp']
+t = b'GET http://mid.gov.mg/ HTTP/1.1\r\nHost: mid.gov.mg\r\nProxy-Connection: keep-alive\r\nCache-Control: max-age=0\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\nAccept-Encoding: gzip, deflate\r\nAccept-Language: fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6\r\n\r\n'  
+t = t.decode('utf-8')
+
+tab = t.split(' ')
+tab[1] = '/'
+tab = ' '.join(tab)
+print(tab)
+
+
+# request_parts = ['GET', 'HTTP/1.1\r\nHost:', 'mid.gov.mg\r\nProxy-Connection:', 'keep-alive\r\nCache-Control:', 'max-age=0\r\nUpgrade-Insecure-Requests:', '1\r\nUser-Agent:', 'Mozilla/5.0', '(Windows', 'NT', '10.0;', 'Win64;', 'x64)', 'AppleWebKit/537.36', '(KHTML,', 'like', 'Gecko)', 'Chrome/121.0.0.0', 'Safari/537.36', 'Edg/121.0.0.0\r\nAccept:', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\nAccept-Encoding:', 'gzip,', 'deflate\r\nAccept-Language:', 'fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6\r\n\r\n']
+
+# # Concatenate the request method and HTTP version
+# request_line = request_parts[0] + ' ' + request_parts[1]
+
+# # Concatenate the headers with a newline character in between
+# request_headers = '\r\n'.join(request_parts[2:])
+
+# # Combine the request line and headers into a single request string
+# request_message = request_line + request_headers
+
+# print(request_message)
