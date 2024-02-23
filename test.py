@@ -527,6 +527,29 @@
 #         print(e)
 #     finally:
 
-# t = 'tay'     
-# t = b'' + t.encode()
-# print(t)
+t = 'tay'     
+t = b'' + t.encode()
+print(t)
+
+x = ['afva', 'bvanjo' ,'cavbrzk', 'dacezp']
+t = b'GET http://mid.gov.mg/ HTTP/1.1\r\nHost: mid.gov.mg\r\nProxy-Connection: keep-alive\r\nCache-Control: max-age=0\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\nAccept-Encoding: gzip, deflate\r\nAccept-Language: fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6\r\n\r\n'  
+t = t.decode('utf-8')
+
+tab = t.split(' ')
+tab[1] = '/'
+tab = ' '.join(tab)
+print(tab)
+
+
+# request_parts = ['GET', 'HTTP/1.1\r\nHost:', 'mid.gov.mg\r\nProxy-Connection:', 'keep-alive\r\nCache-Control:', 'max-age=0\r\nUpgrade-Insecure-Requests:', '1\r\nUser-Agent:', 'Mozilla/5.0', '(Windows', 'NT', '10.0;', 'Win64;', 'x64)', 'AppleWebKit/537.36', '(KHTML,', 'like', 'Gecko)', 'Chrome/121.0.0.0', 'Safari/537.36', 'Edg/121.0.0.0\r\nAccept:', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\nAccept-Encoding:', 'gzip,', 'deflate\r\nAccept-Language:', 'fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6\r\n\r\n']
+
+# # Concatenate the request method and HTTP version
+# request_line = request_parts[0] + ' ' + request_parts[1]
+
+# # Concatenate the headers with a newline character in between
+# request_headers = '\r\n'.join(request_parts[2:])
+
+# # Combine the request line and headers into a single request string
+# request_message = request_line + request_headers
+
+# print(request_message)
