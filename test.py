@@ -526,4 +526,7 @@
 #     except Exception as e:
 #         print(e)
 #     finally:
-        
+
+# t = 'tay'     
+# t = b'' + t.encode()
+# print(t)
