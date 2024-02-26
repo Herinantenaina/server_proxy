@@ -1,8 +1,7 @@
 import socket
 import ssl
 import threading
-import requests
-import  time 
+import certifi
 
 #host = socket.gethostbyname(socket.gethostname())
 host = '127.0.0.1'
@@ -23,11 +22,15 @@ def handle_client(client_socket):
             if not message:
                 break
             #------Obtention du port, du methode et de l'adresse host------
-            host_web, port_web, method =  extract_port_host_method_request(message)
+            host_web, port_web, ip_web =  extract_port_host_method_request(message)
             # Correction du requête
             message = _remove(message) 
-            handle_destination_server(host_web, port_web,client_socket,method, message) 
-
+            if host_web == 'example.com':
+                try:
+                    handle_destination_server(host_web, port_web,client_socket, ip_web, message)
+                except Exception as e:
+                    print(e) 
+            
         client_socket.close()
     except ConnectionResetError:
         print("[ERROR] Connection error")
@@ -49,11 +52,11 @@ def extract_port_host_method_request(message):
     host_web = host_web.split(' ')
     host_web = host_web[1]
     host_web = host_web.strip('\r')
-    print(f'Connecting to: {host_web}')
     try:
-        host_web = f"'{socket.gethostbyname(host_web)}'"
+        ip_web = f"'{socket.gethostbyname(host_web)}'"
     except:
         print("Wrong domain name entered")
+        print(host_web)
         
     #-----port_web-----
     port_web = message_[0]
@@ -65,39 +68,60 @@ def extract_port_host_method_request(message):
     else:
         port_web = int(port_web[1])  
 
-    return host_web, port_web, method
+    return host_web, port_web, ip_web
         
 
 #-----Connection du client au serveur cible-----
-def handle_destination_server(host_web, port_web,client_socket, method, message):
+def handle_destination_server(host_web, port_web,client_socket, ip_web, message):
     #--Tsy maintsy ampiasaina pour les https websites--
+    print(f'Connecting to: {host_web}')
     try:
-        context = ssl.create_default_context()
-        context.verify_mode = ssl.CERT_NONE
-        context.check_hostname = False
-        print(f"verify_modeeeeeeee: {context.verify_mode}, check_hostname: {context.check_hostname}")
+        context = ssl.create_default_context(cafile= certifi.where())
+        context.verify_mode = ssl.CERT_OPTIONAL
+        context.check_hostname = True
+        # print(f"verify_mode: {context.verify_mode}, check_hostname: {context.check_hostname}")
         destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        wrapped_server = context.wrap_socket(destination_server, server_hostname= '93.184.216.34')
-        wrapped_server.connect(('mid.gov.mg', 80))           
+        
+        if port != '80':
+            web_server = context.wrap_socket(destination_server, server_hostname= host_web)
+            web_server.connect(('example.com', port_web))           
                             # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
-        #Sending the request to server
-        wrapped_server.sendall(message)             
-        while True:
-            # server_response = requests.get('http://www.example.com') 
-            server_response = wrapped_server.recv(1024)
+            #Sending the request to server
+            web_server.sendall(message)             
+            while True: 
+                server_response = web_server.recv(1024)
                 #Check if data has a content
-            if len(server_response) > 0:
+                if len(server_response) > 0:
                 # send the server_response to the client
-                client_socket.sendall(server_response)
+                    client_socket.sendall(server_response)
                 #-------------------------------------------------------------------------------   
                 #------MILA AMPINA STOP ETO FA LASA MISEND RESPONSE FOANA LAY SERVEUR-----------
                 #-------------------------------------------------------------------------------
-            else:
-                break    
+                else:
+                    break 
 
-        wrapped_server.close()
+            web_server.close()       
+        else:
+            destination_server.connect(('example.com', port_web))           
+                            # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
+            #Sending the request to server
+            destination_server.sendall(message)             
+            while True:
+                server_response = destination_server.recv(1024)
+                #Check if data has a content
+                if len(server_response) > 0:
+                    # send the server_response to the client
+                    client_socket.sendall(server_response)
+                    #-------------------------------------------------------------------------------   
+                    #------MILA AMPINA STOP ETO FA LASA MISEND RESPONSE FOANA LAY SERVEUR-----------
+                    #-------------------------------------------------------------------------------
+                else:
+                    break           
+
+        destination_server.close()
     except Exception as e:
        print(e)
+        
 
 #-------------Remove the error  due to the domain being wronged-----------
 def _remove(message:bytes):
@@ -112,12 +136,12 @@ def _remove(message:bytes):
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host,port))
-    server.listen(2)
+    server.listen(5)
     print('[SERVER]  The server is on...')
     while True:
         try:
             client_socket, client_addr = server.accept()
-            print(f"Client is connected at: {client_addr[0]}:{port}")
+            # print(f"Client is connected at: {client_addr[0]}:{port}")
             threading.Thread(target=handle_client, args=(client_socket,)).start()
         except ConnectionResetError:
             print("[ERROR] Connection reset")
