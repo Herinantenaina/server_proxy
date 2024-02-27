@@ -6,6 +6,9 @@ import certifi
 #host = socket.gethostbyname(socket.gethostname())
 host = '127.0.0.1'
 port = 8080
+context = ssl.create_default_context(cafile= certifi.where())
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
 
 
 #------------Handling client----------------
@@ -22,14 +25,14 @@ def handle_client(client_socket):
             if not message:
                 break
             #------Obtention du port, du methode et de l'adresse host------
-            host_web, port_web, ip_web =  extract_port_host_method_request(message)
+            host_web, port_web =  extract_port_host_method_request(message)
             # Correction du requête
             message = _remove(message) 
             if host_web == 'example.com':
                 try:
-                    handle_destination_server(host_web, port_web,client_socket, ip_web, message)
+                    handle_destination_server(host_web, port_web,client_socket, message)
                 except Exception as e:
-                    print(e) 
+                    print(e,'ryufgihoij') 
             
         client_socket.close()
     except ConnectionResetError:
@@ -55,8 +58,7 @@ def extract_port_host_method_request(message):
     try:
         ip_web = f"'{socket.gethostbyname(host_web)}'"
     except:
-        print("Wrong domain name entered")
-        print(host_web)
+        print("Wrong domain name entered: [",host_web,"]" )
         
     #-----port_web-----
     port_web = message_[0]
@@ -68,28 +70,25 @@ def extract_port_host_method_request(message):
     else:
         port_web = int(port_web[1])  
 
-    return host_web, port_web, ip_web
+    return host_web, port_web
         
 
 #-----Connection du client au serveur cible-----
-def handle_destination_server(host_web, port_web,client_socket, ip_web, message):
+def handle_destination_server(host_web, port_web,client_socket, message):
     #--Tsy maintsy ampiasaina pour les https websites--
     print(f'Connecting to: {host_web}')
     try:
-        context = ssl.create_default_context(cafile= certifi.where())
-        context.verify_mode = ssl.CERT_OPTIONAL
-        context.check_hostname = True
-        # print(f"verify_mode: {context.verify_mode}, check_hostname: {context.check_hostname}")
         destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
-        if port != '80':
-            web_server = context.wrap_socket(destination_server, server_hostname= host_web)
-            web_server.connect(('example.com', port_web))           
+        if port_web != 80:
+            
+            wrapped_server = context.wrap_socket(destination_server, server_hostname= host_web)
+            wrapped_server.connect(('example.com', port_web))           
                             # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
             #Sending the request to server
-            web_server.sendall(message)             
+            wrapped_server.sendall(message)             
             while True: 
-                server_response = web_server.recv(1024)
+                server_response = wrapped_server.recv(1024)
                 #Check if data has a content
                 if len(server_response) > 0:
                 # send the server_response to the client
@@ -100,8 +99,9 @@ def handle_destination_server(host_web, port_web,client_socket, ip_web, message)
                 else:
                     break 
 
-            web_server.close()       
+            wrapped_server.close()       
         else:
+            print(port_web)
             destination_server.connect(('example.com', port_web))           
                             # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
             #Sending the request to server
@@ -121,9 +121,10 @@ def handle_destination_server(host_web, port_web,client_socket, ip_web, message)
         destination_server.close()
     except Exception as e:
        print(e)
+       print(f"verify_mode: {context.verify_mode}, check_hostname: {context.check_hostname}")
         
 
-#-------------Remove the error  due to the domain being wronged-----------
+#-------------Remove the error int the request due to the domain being wronged-----------
 def _remove(message:bytes):
     message = message.decode('utf-8')
     message = message.split(' ')
@@ -136,7 +137,7 @@ def _remove(message:bytes):
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host,port))
-    server.listen(5)
+    server.listen(10)
     print('[SERVER]  The server is on...')
     while True:
         try:
