@@ -138,7 +138,7 @@ def start():
 
     # Server SSL configuration
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_cert_chain('cert.pem', 'key.pem')
+    context.load_verify_locations(certifi.where())
     wrapped_server = context.wrap_socket(server, server_side=True)
     print('[SERVER]  The server is on...')
     while True:
