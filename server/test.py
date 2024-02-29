@@ -586,14 +586,22 @@
 # print(x)
 
 import socket
+import ssl 
 
 mysocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-mysocket.connect(("www.hostinger.co.id", 80))
-mysocket.send(b'GET / HTTP/1.1\r\nHost: www.hostinger.co.id\r\nProxy-Connection: keep-alive\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\r\nAccept-Encoding: gzip, deflate\r\nAccept-Language: fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6\r\nCookie: cookie_consent=statistics%2Cadvertising; hostingerDeviceIdLocal=65dc2e431a6d3; _fbp=fb.2.1708928623509.650294186; _tt_enable_cookie=1; _ttp=RrdYyZPa6fIZwvwFOaszGrw9kwr\r\n\r\n')
+mysocket.connect(("example.com", 80))
+mysocket.sendall(b'CONNECT / HTTP/1.1\r\nHost: example.com:443\r\nProxy-Connection: keep-alive\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0\r\n\r\n')
+s = mysocket.recv(1024)
+print(s.decode())
 
-while True:
-    data = mysocket.recv(512)
-    if len(data) < 1 :
-        break
-    print(data)
-mysocket.close()
+# while True:
+#     data = mysocket.recv(512)
+#     if len(data) < 1 :
+#         break
+#     print(data)
+# mysocket.close()
+
+# import requests
+
+# s = requests.get('https://example.com')
+# print(s.headers)
