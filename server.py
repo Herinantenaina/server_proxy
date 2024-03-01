@@ -8,10 +8,6 @@ import requests
 # print(_host)
 host = '127.0.0.1'
 port = 8080
-context = ssl.create_default_context()
-context.check_hostname = False
-context.verify_mode = ssl.CERT_NONE
-context.load_default_certs()
 
 #------------Handling client----------------
 def handle_client(client_socket):
@@ -85,29 +81,19 @@ def handle_destination_server(host_web, port_web,client_socket, message):
     try:
         destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if port_web != 80:
-            wrapped_server = context.wrap_socket(destination_server, server_hostname= host_web)
-            wrapped_server.connect((host_web, 80))           
-                            # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
-            # Sending the request to server
-            wrapped_server.sendall(message)
-            while True: 
-                server_response = wrapped_server.recv(1024)
-                #Check if data has a content
+            destination_server.connect((host_web, 80))
+            destination_server.sendall(message)
+            while True:
+                server_response = destination_server.recv(4096)
                 if len(server_response) > 0:
-                # send the server_response to the client
+                    server_response = server_response.replace(b'Connection: close', b'Connection: keep-alive')
+                    print(server_response.decode())
                     client_socket.sendall(server_response)
-                #-------------------------------------------------------------------------------   
-                #------MILA AMPINA STOP ETO FA LASA MISEND RESPONSE FOANA LAY SERVEUR-----------
-                #-------------------------------------------------------------------------------
                 else:
-                    break
+                    break 
+            
 
-            client_socket.sendall(server_response)
-            #-------------------------------------------------------------------------------   
-            #------MILA AMPINA STOP ETO FA LASA MISEND RESPONSE FOANA LAY SERVEUR-----------
-            #-------------------------------------------------------------------------------
-
-            wrapped_server.close()       
+            destination_server.close()       
         else:
             destination_server.connect((host_web, port_web))           
                             # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
@@ -128,9 +114,9 @@ def handle_destination_server(host_web, port_web,client_socket, message):
         destination_server.close()
     except :
        print('Connexion fermée par le serveur web')
-    #    print(f"verify_mode: {context.verify_mode}, check_hostname: {context.check_hostname}")
+    #  print(f"verify_mode: {context.verify_mode}, check_hostname: {context.check_hostname}")
     finally:
-        wrapped_server.close()
+        # wrapped_server.close()
         client_socket.close()
         destination_server.close()    
 
@@ -146,14 +132,21 @@ def _remove(message:bytes):
 #-------------Starting proxy------------------
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
     server.bind((host,port))
     server.listen(10)
+
+    # Server SSL configuration
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.load_verify_locations(certifi.where())
+    wrapped_server = context.wrap_socket(server, server_side=True)
     print('[SERVER]  The server is on...')
     while True:
         try:
-            client_socket, client_addr = server.accept()
+            client_socket, client_addr = wrapped_server.accept()
             # print(f"Client is connected at: {client_addr[0]}:{port}")
             threading.Thread(target=handle_client, args=(client_socket,)).start()
         except ConnectionResetError:
             print("[ERROR] Connection reset")
+
 start()
