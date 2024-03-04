@@ -28,7 +28,6 @@ def handle_client(client_socket):
                 # Correction du requête
                 message = _remove(message)
                 try:
-                    print(message)
                     handle_destination_server(host_web, port_web,client_socket, message)
                 except Exception as e:
                     print(e) 
@@ -114,9 +113,7 @@ def handle_destination_server(host_web, port_web,client_socket, message):
         destination_server.close()
     except :
        print('Connexion fermée par le serveur web')
-    #  print(f"verify_mode: {context.verify_mode}, check_hostname: {context.check_hostname}")
     finally:
-        # wrapped_server.close()
         client_socket.close()
         destination_server.close()    
 
@@ -138,7 +135,10 @@ def start():
 
     # Server SSL configuration
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_verify_locations(certifi.where())
+    context.set_ciphers('ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256')
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    # context.load_verify_locations()
     wrapped_server = context.wrap_socket(server, server_side=True)
     print('[SERVER]  The server is on...')
     while True:
