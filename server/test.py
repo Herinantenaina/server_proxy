@@ -585,14 +585,14 @@
 # x= b'' +  x
 # print(x)
 
-import socket
-import ssl 
+# import socket
+# import ssl 
 
-mysocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-mysocket.connect(("example.com", 80))
-mysocket.sendall(b'CONNECT / HTTP/1.1\r\nHost: example.com\r\nProxy-Connection: keep-alive\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0\r\n\r\n')
-s = mysocket.recv(1024)
-print(s.decode())
+# mysocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# mysocket.connect(("example.com", 80))
+# mysocket.sendall(b'CONNECT / HTTP/1.1\r\nHost: example.com\r\nProxy-Connection: keep-alive\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0\r\n\r\n')
+# s = mysocket.recv(1024)
+# print(s.decode())
 
 # while True:
 #     data = mysocket.recv(512)
@@ -605,3 +605,6 @@ print(s.decode())
 
 # s = requests.get('https://example.com')
 # print(s.headers)
+
+with open('test/server/ssl/tay.txt', 'a') as t:
+    t.write('y')
