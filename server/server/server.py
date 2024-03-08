@@ -1,8 +1,8 @@
+import errno
 import socket
 import ssl
 import threading
-import certifi
-import requests
+import signal
 
 # _host = socket.gethostbyname(socket.gethostname())
 host = '127.0.0.1'
@@ -21,10 +21,12 @@ def handle_client(client_socket):
 
             if not message:
                 break
+
             #------Obtention du port, du methode et de l'adresse host------
             host_web, port_web=  extract_port_host_method_request(message)
+            
+            # Correction du requête
             if host_web == 'example.com':
-                # Correction du requête
                 message = _remove(message)
                 try:
                     handle_destination_server(host_web, port_web,client_socket, message)
@@ -40,13 +42,10 @@ def handle_client(client_socket):
 
 #-------------METHOD-PORT-HOST--------------
 def extract_port_host_method_request(message):
-    message_ = message.decode('utf-8')
+    print(message)
+    message_ = _decode(message)
     message_ = message_.split("\n")   
-            #-----Method-----
-    method = message_[0]
-    method = method.split(" ")
-    method = method[0]
-            
+
             #----Host_Web----
     host_web = message_[1]
     host_web = host_web.split(':')
@@ -59,51 +58,53 @@ def extract_port_host_method_request(message):
     except:
         print("Wrong domain name entered: [",host_web,"]" )
         
-    #-----port_web-----
+    #-----Port_web-----  
     port_web = message_[0]
     port_web = port_web.split(" ")
     port_web = port_web[1]
-    port_web = port_web.split(":")  
-    if port_web[1] != '443':
+    port_web = port_web.split(":") 
+    if port_web[0] == 'http' or port_web[1] == 80 or not port_web[0]:
         port_web = 80
     else:
-        port_web = int(port_web[1])  
+        port_web = int(port_web[1]) 
 
     return host_web, port_web
+    
         
-
 #-----Connection du client au serveur cible-----
 def handle_destination_server(host_web, port_web,client_socket, message):
-    #--Tsy maintsy ampiasaina pour les https websites--
     print(f'Connecting to: {host_web}')
     try:
         destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if port_web != 80:
-            destination_server.connect((host_web, 80))
+        if port_web != 80: # HTTPS
+            destination_server.connect((host_web, port_web))
+            # client_socket.sendall('HTTP/1.1 200 Connection Established\r\n\r\n')
             destination_server.sendall(message)
+            context = ssl.create_default_context()
+            context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/cert-key.pem')
+            wrapped_client = context.wrap_socket(client_socket, server_side=True, do_handshake_on_connect=False)
             while True:
                 server_response = destination_server.recv(4096)
                 if len(server_response) > 0:
                     server_response = server_response.replace(b'Connection: close', b'Connection: keep-alive')
-                    print(server_response.decode())
-                    client_socket.sendall(server_response)
+                    # client_socket.sendall(server_response)
+                    wrapped_client.do_handshake()
+                    wrapped_client.sendall(server_response)
                 else:
                     break 
             
-
             destination_server.close()       
-        else:
+        else: # HTTP
             destination_server.connect((host_web, port_web))           
                             # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
+            # client_socket.sendall('HTTP/1.1 200 Connection Established\r\n\r\n')
             # Sending the request to server
             destination_server.sendall(message)             
             while True:
                 server_response = destination_server.recv(1024)
-                #Check if data has a content
                 if len(server_response) > 0:
-                    # send the server_response to the client
                     client_socket.sendall(server_response)
-                    #-------------------------------------------------------------------------------   
+                    #-------------------------------------------------------------------------------
                     #------MILA AMPINA STOP ETO FA LASA MISEND RESPONSE FOANA LAY SERVEUR-----------
                     #-------------------------------------------------------------------------------
                 else:
@@ -114,7 +115,9 @@ def handle_destination_server(host_web, port_web,client_socket, message):
        print('Connexion fermée par le serveur web')
     finally:
         client_socket.close()
-        destination_server.close()    
+        destination_server.close()
+        if 'wrapped_client' in locals() or 'wrapped_client' in globals():
+            wrapped_client.close()    
 
 #-------------Remove the error int the request due to the domain being wronged-----------
 def _remove(message:bytes):
@@ -125,27 +128,54 @@ def _remove(message:bytes):
     message = b'' + message.encode()
     return message
 
+#------------Stopping the server manually-----------------
+def signal_handler(server,signal, frame):
+    print('[SERVER] Stopping the server...')
+    server.close()
+    
+#-------------Decoding the message since some have different format--------------
+def _decode(message:any):
+    try:
+        message = message.decode('utf-8')
+        return message
+    except UnicodeDecodeError:
+        try:
+            message = message.decode('ISO-8859-1')
+            return message
+        except UnicodeDecodeError:
+            try:
+                message = message.decode('Windows-1252')
+                return message
+            except:
+                return None   
+    
+           
 #-------------Starting proxy------------------
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
     server.bind((host,port))
-    server.listen(10)
+    server.listen(1)
 
     # Server SSL configuration
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.set_ciphers('ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256')
-    context.check_hostname = True
-    context.verify_mode = ssl.CERT_REQUIRED
-    context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/cert-key.pem')
-    wrapped_server = context.wrap_socket(server, server_side=True)
+    # context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    # context.set_ciphers('ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256')
+    # context.check_hostname = False
+    # context.verify_mode = ssl.CERT_NONE
+    # context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/key.pem')
+    # wrapped_server = context.wrap_socket(server, server_side=True)
     print('[SERVER]  The server is on...')
     while True:
         try:
-            client_socket, client_addr = wrapped_server.accept()
+            # global client_socket
+            client_socket, client_addr = server.accept()
             # print(f"Client is connected at: {client_addr[0]}:{port}")
             threading.Thread(target=handle_client, args=(client_socket,)).start()
+            signal.signal(signal.SIGINT, signal_handler)
         except ConnectionResetError:
             print("[ERROR] Connection reset")
+        except OSError as e :
+            if e.errno != errno.EINTR:
+                raise
 
 start()
