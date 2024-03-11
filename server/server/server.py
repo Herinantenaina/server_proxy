@@ -3,8 +3,8 @@ import socket
 import ssl
 import threading
 import signal
+import requests
 
-# _host = socket.gethostbyname(socket.gethostname())
 host = '127.0.0.1'
 port = 8080
 
@@ -26,7 +26,8 @@ def handle_client(client_socket):
             host_web, port_web=  extract_port_host_method_request(message)
             
             # Correction du requête
-            if host_web == 'example.com':
+            if host_web == 'example.com' and host_web != None and port_web != None:
+                print(message)
                 message = _remove(message)
                 try:
                     handle_destination_server(host_web, port_web,client_socket, message)
@@ -42,34 +43,37 @@ def handle_client(client_socket):
 
 #-------------METHOD-PORT-HOST--------------
 def extract_port_host_method_request(message):
-    print(message)
-    message_ = _decode(message)
-    message_ = message_.split("\n")   
-
-            #----Host_Web----
-    host_web = message_[1]
-    host_web = host_web.split(':')
-    host_web = host_web[1]
-    host_web = host_web.split(' ')
-    host_web = host_web[1]
-    host_web = host_web.strip('\r')
     try:
-        ip_web = f"'{socket.gethostbyname(host_web)}'"
-    except:
-        print("Wrong domain name entered: [",host_web,"]" )
-        
-    #-----Port_web-----  
-    port_web = message_[0]
-    port_web = port_web.split(" ")
-    port_web = port_web[1]
-    port_web = port_web.split(":") 
-    if port_web[0] == 'http' or port_web[1] == 80 or not port_web[0]:
-        port_web = 80
-    else:
-        port_web = int(port_web[1]) 
+        message_ = _decode(message)
+        message_ = message_.split("\n")   
 
-    return host_web, port_web
+                #----Host_Web----
+        host_web = message_[1]
+        host_web = host_web.split(':')
+        host_web = host_web[1]
+        host_web = host_web.split(' ')
+        host_web = host_web[1]
+        host_web = host_web.strip('\r')
+        try:
+            ip_web = f"'{socket.gethostbyname(host_web)}'"
+        except:
+            print("Wrong domain name entered: [",host_web,"]" )
+            
+        #-----Port_web-----  
+        port_web = message_[0]
+        port_web = port_web.split(" ")
+        port_web = port_web[1]
+        port_web = port_web.split(":") 
+        if port_web[0] == 'http' or port_web[1] == 80 or not port_web[0]:
+            port_web = 80
+        else:
+            port_web = int(port_web[1]) 
+
+        return host_web, port_web
     
+    except:
+        return None, None
+
         
 #-----Connection du client au serveur cible-----
 def handle_destination_server(host_web, port_web,client_socket, message):
@@ -84,7 +88,7 @@ def handle_destination_server(host_web, port_web,client_socket, message):
             context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/cert-key.pem')
             wrapped_client = context.wrap_socket(client_socket, server_side=True, do_handshake_on_connect=False)
             while True:
-                server_response = destination_server.recv(4096)
+                server_response = requests.get('https://example.com')
                 if len(server_response) > 0:
                     server_response = server_response.replace(b'Connection: close', b'Connection: keep-alive')
                     # client_socket.sendall(server_response)
@@ -102,6 +106,7 @@ def handle_destination_server(host_web, port_web,client_socket, message):
             destination_server.sendall(message)             
             while True:
                 server_response = destination_server.recv(1024)
+                # print(server_response)
                 if len(server_response) > 0:
                     client_socket.sendall(server_response)
                     #-------------------------------------------------------------------------------
@@ -164,13 +169,14 @@ def start():
     # context.verify_mode = ssl.CERT_NONE
     # context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/key.pem')
     # wrapped_server = context.wrap_socket(server, server_side=True)
+    # wrapped_server.listen(1)
     print('[SERVER]  The server is on...')
     while True:
         try:
             # global client_socket
             client_socket, client_addr = server.accept()
             # print(f"Client is connected at: {client_addr[0]}:{port}")
-            threading.Thread(target=handle_client, args=(client_socket,)).start()
+            threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start()
             signal.signal(signal.SIGINT, signal_handler)
         except ConnectionResetError:
             print("[ERROR] Connection reset")
