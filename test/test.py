@@ -637,30 +637,85 @@
 # except Exception as e:
 #     print(e)
 
-import socket
+# import socket
+# import ssl
+
+# def check_ssl_certificate(ip_address, port):
+#     context = ssl.create_default_context()
+#     context.check_hostname = True
+#     context.verify_mode = ssl.CERT_REQUIRED
+
+#     try:
+#         sock = socket.create_connection((ip_address, port))
+#         wrapped_sock = context.wrap_socket(sock, server_hostname=ip_address)
+#         wrapped_sock.connect((ip_address, port))
+
+#         cert = wrapped_sock.getpeercert()
+#         print(f"Subject: {cert['subject']}")
+#         print(f"Issuer: {cert['issuer']}")
+#         print(f"Expiration: {cert['notAfter'].decode('ascii')}")
+
+#         # Additional checks
+#         # Verify that the certificate is issued by a trusted CA
+#         # Verify that the certificate's domain matches the IP address or hostname
+
+#     except Exception as e:
+#         print(f"Error checking SSL certificate: {e}")
+
+# # Example usage
+# check_ssl_certificate('127.0.0.1', 8080)  # Replace with your desired IP address and port
+
 import ssl
+import requests
+import threading
+import socket
+import errno
+import signal
 
-def check_ssl_certificate(ip_address, port):
-    context = ssl.create_default_context()
-    context.check_hostname = True
-    context.verify_mode = ssl.CERT_REQUIRED
+host ='localhost'
+port = 8080
 
-    try:
-        sock = socket.create_connection((ip_address, port))
-        wrapped_sock = context.wrap_socket(sock, server_hostname=ip_address)
-        wrapped_sock.connect((ip_address, port))
+response = requests.get('http://example.com')
+# response = ' '.join(response.headers)
+print(response.headers)
 
-        cert = wrapped_sock.getpeercert()
-        print(f"Subject: {cert['subject']}")
-        print(f"Issuer: {cert['issuer']}")
-        print(f"Expiration: {cert['notAfter'].decode('ascii')}")
+def handle_client(client_socket):
+    while True:
+        if client_socket.fileno() != -1:  
+            print('A client is connected')
+            while True:
+                try:
+                    response = requests.get('http://example.com')
+                    client_socket.sendall(response.text.encode())
+                except Exception as e :
+                    print(e,'---------------------')
+                    break
+                finally:
+                    client_socket.close()
+        else:
+            break
 
-        # Additional checks
-        # Verify that the certificate is issued by a trusted CA
-        # Verify that the certificate's domain matches the IP address or hostname
+def signal_handler(server,signal, frame):
+    print('[SERVER] Stopping the server...')
+    server.close()
 
-    except Exception as e:
-        print(f"Error checking SSL certificate: {e}")
+def start():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind((host,port))
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+        server.listen(1)
+        print('[SERVER]  The server is on...')
+        while True:
+            try:
+                # global client_socket
+                client_socket, client_addr = server.accept()
+                # print(f"Client is connected at: {client_addr[0]}:{port}")
+                threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start() 
+                signal.signal(signal.SIGINT, signal_handler)
+            except ConnectionResetError:
+                print("[ERROR] Connection reset")
+            except OSError as e :
+                if e.errno != errno.EINTR:
+                    raise
 
-# Example usage
-check_ssl_certificate('127.0.0.1', 8080)  # Replace with your desired IP address and port
+start()
