@@ -10,35 +10,36 @@ port = 8080
 
 #------------Handling client----------------
 def handle_client(client_socket):
-    try:
-    # client_socket.setblocking(False)
-        while True:
-            try:
-                message = client_socket.recv(1024) 
-            except Exception as e:
-                print(e)
-                break
-
-            if not message:
-                break
-
-            #------Obtention du port, du methode et de l'adresse host------
-            host_web, port_web=  extract_port_host_method_request(message)
-            
-            # Correction du requête
-            if host_web == 'example.com' and host_web != None and port_web != None:
-                print(message)
-                message = _remove(message)
+    if client_socket.fileno() != -1: #  Check if the client's socket is closed
+        try:
+            # client_socket.setblocking(False)
+            while True:
                 try:
-                    handle_destination_server(host_web, port_web,client_socket, message)
+                    message = client_socket.recv(1024) 
                 except Exception as e:
-                    print(e) 
+                    print(e)
+                    break
+
+                if not message:
+                    break
+
+                #------Obtention du port, du methode et de l'adresse host------
+                host_web, port_web=  extract_port_host_method_request(message)
+                
+                # Correction du requête
+                if host_web == 'example.com' and host_web != None and port_web != None:
+                    print(message)
+                    message = _remove(message)
+                    try:
+                        handle_destination_server(host_web, port_web,client_socket, message)
+                    except Exception as e:
+                        print(e) 
             
-        client_socket.close()
-    except ConnectionResetError:
-        print("[ERROR] Connection error")
-    finally:
-        client_socket.close()
+            client_socket.close()
+        except ConnectionResetError:
+            print("[ERROR] Connection error")
+        finally:
+            client_socket.close()
 
 
 #-------------METHOD-PORT-HOST--------------
@@ -103,10 +104,11 @@ def handle_destination_server(host_web, port_web,client_socket, message):
                             # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
             # client_socket.sendall('HTTP/1.1 200 Connection Established\r\n\r\n')
             # Sending the request to server
-            destination_server.sendall(message)             
+            destination_server.sendall(message)        
             while True:
                 server_response = destination_server.recv(1024)
-                # print(server_response)
+                print('-------------------------')
+                print(server_response)
                 if len(server_response) > 0:
                     client_socket.sendall(server_response)
                     #-------------------------------------------------------------------------------
