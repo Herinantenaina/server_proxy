@@ -28,7 +28,6 @@ def handle_client(client_socket):
                 
                 # Correction du requête
                 if host_web == 'example.com' and host_web != None and port_web != None:
-                    print(message)
                     message = _remove(message)
                     try:
                         handle_destination_server(host_web, port_web,client_socket, message)
@@ -81,45 +80,34 @@ def handle_destination_server(host_web, port_web,client_socket, message):
     print(f'Connecting to: {host_web}')
     try:
         destination_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if port_web != 80: # HTTPS
-            destination_server.connect((host_web, port_web))
-            # client_socket.sendall('HTTP/1.1 200 Connection Established\r\n\r\n')
-            destination_server.sendall(message)
-            context = ssl.create_default_context()
-            context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/cert-key.pem')
-            wrapped_client = context.wrap_socket(client_socket, server_side=True, do_handshake_on_connect=False)
-            while True:
-                server_response = requests.get('https://example.com')
+        destination_server.connect((host_web, port_web))
+        destination_server.sendall(message)
+        
+        while True:
+            if port_web == 80: # HTTP
+                server_response = destination_server.recv(1024)
                 if len(server_response) > 0:
-                    server_response = server_response.replace(b'Connection: close', b'Connection: keep-alive')
-                    # client_socket.sendall(server_response)
+                    client_socket.sendall(server_response)
+                else:
+                    break 
+
+            else: # HTTPS
+                context = ssl.create_default_context()
+                context.load_verify_locations('test/server/ssl/cert.pem', 'test/server/ssl/cert-key.pem')
+                wrapped_client = context.wrap_socket(client_socket, server_side=True, do_handshake_on_connect=False)
+                server_response = destination_server.recv(1024)
+                if len(server_response) > 0:
+                    # server_response = server_response.replace(b'Connection: close', b'Connection: keep-alive')
+                    wrapped_client.sendall(server_response)
                     wrapped_client.do_handshake()
                     wrapped_client.sendall(server_response)
                 else:
-                    break 
-            
-            destination_server.close()       
-        else: # HTTP
-            destination_server.connect((host_web, port_web))           
-                            # '104.18.40.186'  hostinger.co.id    example.com:93.184.216.34  mid.gov.mg:102.16.18.73
-            # client_socket.sendall('HTTP/1.1 200 Connection Established\r\n\r\n')
-            # Sending the request to server
-            destination_server.sendall(message)        
-            while True:
-                server_response = destination_server.recv(1024)
-                print('-------------------------')
-                print(server_response)
-                if len(server_response) > 0:
-                    client_socket.sendall(server_response)
-                    #-------------------------------------------------------------------------------
-                    #------MILA AMPINA STOP ETO FA LASA MISEND RESPONSE FOANA LAY SERVEUR-----------
-                    #-------------------------------------------------------------------------------
-                else:
-                    break                    
+                    break
 
+                
         destination_server.close()
-    except :
-       print('Connexion fermée par le serveur web')
+    except Exception as e:
+       print(e,'[Fermé par le serveur]')
     finally:
         client_socket.close()
         destination_server.close()
@@ -162,22 +150,20 @@ def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
     server.bind((host,port))
-    server.listen(1)
+    server.listen(5)
 
     # Server SSL configuration
-    # context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     # context.set_ciphers('ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256')
     # context.check_hostname = False
     # context.verify_mode = ssl.CERT_NONE
     # context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/key.pem')
     # wrapped_server = context.wrap_socket(server, server_side=True)
-    # wrapped_server.listen(1)
+    # wrapped_server.listen(5)
     print('[SERVER]  The server is on...')
     while True:
         try:
-            # global client_socket
             client_socket, client_addr = server.accept()
-            # print(f"Client is connected at: {client_addr[0]}:{port}")
             threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start()
             signal.signal(signal.SIGINT, signal_handler)
         except ConnectionResetError:
