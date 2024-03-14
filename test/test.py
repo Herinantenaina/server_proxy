@@ -665,57 +665,76 @@
 # # Example usage
 # check_ssl_certificate('127.0.0.1', 8080)  # Replace with your desired IP address and port
 
+
+
+# -------------------------------------------------------------------
+# -------Using request to send the server reponse to the client------
+# -------------------------------------------------------------------
+# import ssl
+# import requests
+# import threading
+# import socket
+# import errno
+# import signal
+
+# host ='localhost'
+# port = 8080
+
+# response = requests.get('http://example.com')
+# response = 'e'.join(response.headers)
+# print(response)
+
+# def handle_client(client_socket):
+#     while True:
+#         if client_socket.fileno() != -1:  
+#             print('A client is connected')
+#             while True:
+#                 try:
+#                     response = requests.get('http://example.com')
+#                     client_socket.sendall(response.text.encode())
+#                 except Exception as e :
+#                     print(e,'---------------------')
+#                     break
+#                 finally:
+#                     client_socket.close()
+#         else:
+#             break
+
+# def signal_handler(server,signal, frame):
+#     print('[SERVER] Stopping the server...')
+#     server.close()
+
+# def start():
+#     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+#         server.bind((host,port))
+#         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+#         server.listen(1)
+#         print('[SERVER]  The server is on...')
+#         while True:
+#             try:
+#                 # global client_socket
+#                 client_socket, client_addr = server.accept()
+#                 # print(f"Client is connected at: {client_addr[0]}:{port}")
+#                 threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start() 
+#                 signal.signal(signal.SIGINT, signal_handler)
+#             except ConnectionResetError:
+#                 print("[ERROR] Connection reset")
+#             except OSError as e :
+#                 if e.errno != errno.EINTR:
+#                     raise
+
+# start()
+
 import ssl
-import requests
-import threading
-import socket
-import errno
-import signal
+import os
+from OpenSSL import crypto
 
-host ='localhost'
-port = 8080
+# Load the SSL/TLS certificate and private key
+cert = crypto.load_certificate(crypto.FILETYPE_PEM, open('cert.pem').read())
+key = crypto.load_privatekey(crypto.FILETYPE_PEM, open('key.pem').read())
 
-response = requests.get('http://example.com')
-# response = ' '.join(response.headers)
-print(response.headers)
+# Decrypt the private key and retrieve the pass phrase
+pass_phrase = crypto.PKCS12_unwrap(key, cert.get_pubkey(), 'AES-256-CBC')
 
-def handle_client(client_socket):
-    while True:
-        if client_socket.fileno() != -1:  
-            print('A client is connected')
-            while True:
-                try:
-                    response = requests.get('http://example.com')
-                    client_socket.sendall(response.text.encode())
-                except Exception as e :
-                    print(e,'---------------------')
-                    break
-                finally:
-                    client_socket.close()
-        else:
-            break
-
-def signal_handler(server,signal, frame):
-    print('[SERVER] Stopping the server...')
-    server.close()
-
-def start():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.bind((host,port))
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-        server.listen(1)
-        print('[SERVER]  The server is on...')
-        while True:
-            try:
-                # global client_socket
-                client_socket, client_addr = server.accept()
-                # print(f"Client is connected at: {client_addr[0]}:{port}")
-                threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start() 
-                signal.signal(signal.SIGINT, signal_handler)
-            except ConnectionResetError:
-                print("[ERROR] Connection reset")
-            except OSError as e :
-                if e.errno != errno.EINTR:
-                    raise
-
-start()
+# Print the pass phrase
+print(pass_phrase.decode('utf-8'))
