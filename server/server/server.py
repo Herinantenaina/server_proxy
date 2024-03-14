@@ -5,7 +5,7 @@ import threading
 import signal
 import requests
 
-host = '127.0.0.1'
+host = 'localhost'
 port = 8080
 
 #------------Handling client----------------
@@ -92,8 +92,8 @@ def handle_destination_server(host_web, port_web,client_socket, message):
                     break 
 
             else: # HTTPS
-                context = ssl.create_default_context()
-                context.load_verify_locations('test/server/ssl/cert.pem', 'test/server/ssl/cert-key.pem')
+                context = ssl.create_default_context(ssl.PROTOCOL_TLS_CLIENT)
+                context.load_verify_locations(cafile='ssl/ca.pem')
                 wrapped_client = context.wrap_socket(client_socket, server_side=True, do_handshake_on_connect=False)
                 server_response = destination_server.recv(1024)
                 if len(server_response) > 0:
@@ -150,20 +150,20 @@ def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
     server.bind((host,port))
-    server.listen(5)
-
+    
     # Server SSL configuration
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    # context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, ssl.PROTOCOL_TLS_SERVER)
+    context = ssl.create_default_context(ssl.PROTOCOL_TLS_SERVER)
     # context.set_ciphers('ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256')
-    # context.check_hostname = False
-    # context.verify_mode = ssl.CERT_NONE
-    # context.load_verify_locations('test/server/ssl/ca.pem', 'test/server/ssl/key.pem')
-    # wrapped_server = context.wrap_socket(server, server_side=True)
-    # wrapped_server.listen(5)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    context.load_cert_chain(certfile='ssl/cert.pem', keyfile='ssl/key.pem')
+    wrapped_server = context.wrap_socket(server, server_side=True)
+    wrapped_server.listen(5)
     print('[SERVER]  The server is on...')
     while True:
         try:
-            client_socket, client_addr = server.accept()
+            client_socket, client_addr = wrapped_server.accept()
             threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start()
             signal.signal(signal.SIGINT, signal_handler)
         except ConnectionResetError:
