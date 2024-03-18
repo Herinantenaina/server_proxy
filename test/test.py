@@ -725,16 +725,50 @@
 
 # start()
 
+import socket
 import ssl
-import os
-from OpenSSL import crypto
 
-# Load the SSL/TLS certificate and private key
-cert = crypto.load_certificate(crypto.FILETYPE_PEM, open('cert.pem').read())
-key = crypto.load_privatekey(crypto.FILETYPE_PEM, open('key.pem').read())
+hostname = 'www.example.com'
+context = ssl.create_default_context()
 
-# Decrypt the private key and retrieve the pass phrase
-pass_phrase = crypto.PKCS12_unwrap(key, cert.get_pubkey(), 'AES-256-CBC')
+with socket.create_connection((hostname, 443)) as sock:
+    with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+        try:
+            ssock.send(b'GET / HTTP/1.1\r\nHost: ' + hostname.encode()+ b'\r\n\r\n')
+            response= ssock.recv(1024)
+            print(response.decode('utf-8'))
+        except Exception as e:
+            print(e)
 
-# Print the pass phrase
-print(pass_phrase.decode('utf-8'))
+
+# with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as destination_server:
+#             destination_server.connect((host_web, port_web))
+#             destination_server.sendall(message)
+            
+#             while True:
+#                 if port_web == 80: # HTTP
+#                     server_response = destination_server.recv(1024)
+#                     if len(server_response) > 0:
+#                         client_socket.sendall(server_response)
+#                     else:
+#                         break 
+
+#                 else: # HTTPS
+#                     context = ssl.create_default_context(ssl.PROTOCOL_TLS_CLIENT)
+#                     context.load_verify_locations(cafile='ssl/ca.pem')
+#                     wrapped_client = context.wrap_socket(client_socket, server_side=True, do_handshake_on_connect=False)
+#                     server_response = destination_server.recv(1024)
+#                     if len(server_response) > 0:
+#                         try:
+#                             destination_server.getpeercert()
+#                         except:
+#                             print('Did not get the ssl certificate of the webserver')
+#                         # server_response = server_response.replace(b'Connection: close', b'Connection: keep-alive')
+#                         # wrapped_client.sendall(server_response)
+#                         # wrapped_client.do_handshake()
+#                         # wrapped_client.sendall(server_response)
+#                     else:
+#                         break
+
+                    
+#             destination_server.close()
