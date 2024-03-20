@@ -606,5 +606,277 @@
 # s = requests.get('https://example.com')
 # print(s.headers)
 
-with open('test/server/ssl/tay.txt', 'a') as t:
-    t.write('y')
+# import socket
+
+# def simple_http_server(host='127.0.0.1', port=8080):
+#     # Create a new socket object
+#     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#         # Bind the socket to the address and port
+#         s.bind((host, port))
+#         # Listen for incoming connections
+#         s.listen()
+#         print(f'Server listening on {host}:{port}')
+#         # Accept a connection
+#         conn, addr = s.accept()
+#         with conn:
+#             print('Connected by', addr)
+#             # Set the HTML response
+#             html_response = '<html><body><h1>Hello, World!</h1></body></html>'
+#             # Send the HTTP response header
+#             header = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n'.format(len(html_response))
+#             # Send the header and HTML content
+#             conn.sendall(header.encode('utf-8'))
+#             # Send a blank line between the header and content
+#             conn.sendall(b'\r\n')
+#             # Send the HTML content
+#             conn.sendall(html_response.encode('utf-8'))
+
+# # Call the function to start the server
+# try:
+#     simple_http_server()
+# except Exception as e:
+#     print(e)
+
+# import socket
+# import ssl
+
+# def check_ssl_certificate(ip_address, port):
+#     context = ssl.create_default_context()
+#     context.check_hostname = True
+#     context.verify_mode = ssl.CERT_REQUIRED
+
+#     try:
+#         sock = socket.create_connection((ip_address, port))
+#         wrapped_sock = context.wrap_socket(sock, server_hostname=ip_address)
+#         wrapped_sock.connect((ip_address, port))
+
+#         cert = wrapped_sock.getpeercert()
+#         print(f"Subject: {cert['subject']}")
+#         print(f"Issuer: {cert['issuer']}")
+#         print(f"Expiration: {cert['notAfter'].decode('ascii')}")
+
+#         # Additional checks
+#         # Verify that the certificate is issued by a trusted CA
+#         # Verify that the certificate's domain matches the IP address or hostname
+
+#     except Exception as e:
+#         print(f"Error checking SSL certificate: {e}")
+
+# # Example usage
+# check_ssl_certificate('127.0.0.1', 8080)  # Replace with your desired IP address and port
+
+
+
+# -------------------------------------------------------------------
+# -------Using request to send the server reponse to the client------
+# -------------------------------------------------------------------
+# import ssl
+# import requests
+# import threading
+# import socket
+# import errno
+# import signal
+
+# host ='localhost'
+# port = 8080
+
+# response = requests.get('http://example.com')
+# response = 'e'.join(response.headers)
+# print(response)
+
+# def handle_client(client_socket):
+#     while True:
+#         if client_socket.fileno() != -1:  
+#             print('A client is connected')
+#             while True:
+#                 try:
+#                     response = requests.get('http://example.com')
+#                     client_socket.sendall(response.text.encode())
+#                 except Exception as e :
+#                     print(e,'---------------------')
+#                     break
+#                 finally:
+#                     client_socket.close()
+#         else:
+#             break
+
+# def signal_handler(server,signal, frame):
+#     print('[SERVER] Stopping the server...')
+#     server.close()
+
+# def start():
+#     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+#         server.bind((host,port))
+#         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+#         server.listen(1)
+#         print('[SERVER]  The server is on...')
+#         while True:
+#             try:
+#                 # global client_socket
+#                 client_socket, client_addr = server.accept()
+#                 # print(f"Client is connected at: {client_addr[0]}:{port}")
+#                 threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start() 
+#                 signal.signal(signal.SIGINT, signal_handler)
+#             except ConnectionResetError:
+#                 print("[ERROR] Connection reset")
+#             except OSError as e :
+#                 if e.errno != errno.EINTR:
+#                     raise
+
+# start()
+
+
+# with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as destination_server:
+#             destination_server.connect((host_web, port_web))
+#             destination_server.sendall(message)
+            
+#             while True:
+#                 if port_web == 80: # HTTP
+#                     server_response = destination_server.recv(1024)
+#                     if len(server_response) > 0:
+#                         client_socket.sendall(server_response)
+#                     else:
+#                         break 
+
+#                 else: # HTTPS
+#                     context = ssl.create_default_context(ssl.PROTOCOL_TLS_CLIENT)
+#                     context.load_verify_locations(cafile='ssl/ca.pem')
+#                     wrapped_client = context.wrap_socket(client_socket, server_side=True, do_handshake_on_connect=False)
+#                     server_response = destination_server.recv(1024)
+#                     if len(server_response) > 0:
+#                         try:
+#                             destination_server.getpeercert()
+#                         except:
+#                             print('Did not get the ssl certificate of the webserver')
+#                         # server_response = server_response.replace(b'Connection: close', b'Connection: keep-alive')
+#                         # wrapped_client.sendall(server_response)
+#                         # wrapped_client.do_handshake()
+#                         # wrapped_client.sendall(server_response)
+#                     else:
+#                         break
+
+                    
+#             destination_server.close()
+
+import socket
+import ssl
+import time
+import threading
+
+hostname = 'www.example.com'
+context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+context.load_cert_chain(certfile='ssl/cert.pem', keyfile='ssl/key.pem')
+host = 'localhost'
+port = 8081
+# hostname_server = socket.getfqdn()
+
+def extract_port_host_method_request(message):
+    try:
+        message_ = _decode(message)
+        message_ = message_.split("\n")   
+
+                #----Host_Web----
+        host_web = message_[1]
+        host_web = host_web.split(':')
+        host_web = host_web[1]
+        host_web = host_web.split(' ')
+        host_web = host_web[1]
+        host_web = host_web.strip('\r')
+        try:
+            ip_web = f"'{socket.gethostbyname(host_web)}'"
+        except:
+            print("Wrong domain name entered: [",host_web,"]" )     
+    
+
+        return host_web
+    except:
+        return None
+    
+#-------------Decoding the message since some have different format--------------    
+def _decode(message:any):
+    try:
+        message = message.decode('utf-8')
+        return message
+    except UnicodeDecodeError:
+        try:
+            message = message.decode('ISO-8859-1')
+            return message
+        except UnicodeDecodeError:
+            try:
+                message = message.decode('Windows-1252')
+                return message
+            except:
+                return None 
+
+#-------------Remove the error int the request due to the domain being wronged-----------
+def _remove(message:bytes):
+    message = message.decode('utf-8')
+    message = message.split(' ')
+    message[1] = '/'
+    message = ' '.join(message)
+    message = b'' + message.encode()
+    return message
+
+
+#------------Stopping the server manually-----------------
+def signal_handler(signal, frame):
+    print('[SERVER] Stopping the server...')
+    exit(0)
+
+
+def request(client_socket):
+    if client_socket.fileno() != -1:
+        while True:
+            try:
+                message = client_socket.recv(1024)
+            except Exception as e:
+                break
+
+            if not message:
+                break
+            
+            #------Obtention du port, du methode et de l'adresse host------
+            host_web=  extract_port_host_method_request(message)
+        print('A client is connected')
+        with socket.create_connection((hostname, 443)) as sock:
+            with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                ssock.send(b'GET / HTTP/1.1\r\nHost: ' + hostname.encode()+ b'\r\n\r\n')
+                response = bytes()
+                while True:
+                    try:
+                        data= ssock.recv(1024)
+                        if not data:
+                            break
+                        response += data
+                        client_socket.sendall(data)
+                        print(response)
+                    except Exception as e:
+                        print(e)
+                        break
+                    finally:
+                        sock.close()    
+
+
+#-------------Starting proxy------------------
+def start():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+        server.bind((host,port))
+        server.listen(1)
+        print('[SERVER]  The server is on...')
+        while True:
+            try:
+                client_socket, client_addr = server.accept()
+                # client_socket = context.wrap_socket(client_socket, server_side=True)
+                threading.Thread(target=request, args=(client_socket,), daemon=True).start()
+                signal.signal(signal.SIGINT, signal_handler)
+            except ConnectionResetError:
+                print("[ERROR] Connection reset")
+            except OSError as e :
+                raise 
+            except KeyboardInterrupt:
+                print('[SERVER] The server is stopping...')
+                exit(0)
+
+
+start()
