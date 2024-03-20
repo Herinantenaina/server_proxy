@@ -2,11 +2,9 @@ import errno
 import socket
 import threading
 import signal
-import os
 
 host = 'localhost'
 port = 8080
-os.setuid(0)
 #------------Handling client----------------
 def handle_client(client_socket):
     if client_socket.fileno() != -1: #  Check if the client's socket is closed
