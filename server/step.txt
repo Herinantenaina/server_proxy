@@ -8,3 +8,4 @@ Add authentication and authorization to secure the proxy server.
 Add caching to improve performance and reduce network traffic.
 Add support for HTTP headers and query parameters.
 Add support for HTTP/2 and HTTP/3 protocols.
+Add the context manager file
