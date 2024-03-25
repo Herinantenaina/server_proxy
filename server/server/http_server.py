@@ -21,10 +21,10 @@ def handle_client(client_socket):
                     break
 
                 #------Obtention du port, du methode et de l'adresse host------
-                host_web=  extract_port_host_method_request(message)
+                host_web, port_web=  extract_port_host_method_request(message)
                 
                 # Correction du requête
-                if host_web == 'example.com' and host_web != None:
+                if host_web != None and port_web == 80: #host_web == 'example.com':
                     message = _remove(message)
                     try:
                         handle_destination_server(host_web, client_socket, message)
@@ -54,12 +54,21 @@ def extract_port_host_method_request(message):
         try:
             ip_web = f"'{socket.gethostbyname(host_web)}'"
         except:
-            print("Wrong domain name entered: [",host_web,"]" )     
-    
+            print("Wrong domain name entered: [",host_web,"]" )
+            host_web = None
 
-        return host_web
+        port_web = message_[0]
+        port_web = port_web.split(" ")
+        port_web = port_web[1]
+        port_web = port_web.split(":")  
+        if port_web[1] != '443':
+            port_web = 80
+        else:
+            port_web = int(port_web[1])  
+
+        return host_web, port_web
     except:
-        return None,
+        return None,None
 
         
 #-----Connection du client au serveur cible-----
@@ -68,16 +77,18 @@ def handle_destination_server(host_web, client_socket, message):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as destination_server:
             destination_server.connect((host_web, 80))
+            # client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
             destination_server.sendall(message)
-            
+            print(message)
             while True:
                     server_response = destination_server.recv(1024)
-                    if len(server_response) > 0:
-                        client_socket.sendall(server_response)
-                    else:
+                    if len(server_response) <= 0:
                         break 
-                    
-            destination_server.close()
+                    try:
+                        client_socket.sendall(server_response) 
+                    except Exception as e:
+                        print("Erreur lors de l'envoi des données du serveur vers le client")
+                        break
     except Exception as e:
        print(e,'[Fermé par le serveur]')
     finally:
@@ -114,7 +125,7 @@ def _decode(message:any):
             except:
                 return None   
     
-           
+          
 #-------------Starting proxy------------------
 def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -123,19 +134,19 @@ def start():
     server.listen(5)
     
     print('[SERVER]  The server is on...')
-    while True:
-        try:
-            client_socket, client_addr = server.accept()
-            threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start()
-            signal.signal(signal.SIGINT, signal_handler)
-        except ConnectionResetError:
-            print("[ERROR] Connection reset")
-        except OSError as e :
-            if e.errno != errno.EINTR:
-                raise
-        except KeyboardInterrupt :
-            print('[SERVER] The server is stopping...')
-            exit(0)
-
+    try:
+        signal.signal(signal.SIGINT, signal_handler)
+        while True:
+            try:
+                client_socket, client_addr = server.accept()
+                threading.Thread(target=handle_client, args=(client_socket,), daemon=True).start()
+            except ConnectionResetError:
+                print("[ERROR] Connection reset")
+            except OSError as e :
+                if e.errno != errno.EINTR:
+                    raise
+    except KeyboardInterrupt :
+        print('[SERVER] Stopping the server...')
+        exit(0)
 
 start()
