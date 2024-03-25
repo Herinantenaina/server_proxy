@@ -13,14 +13,14 @@ context_web.load_verify_locations('ssl/ca.pem')
 context_client = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context_client.load_cert_chain(certfile='ssl/cert.pem', keyfile='ssl/key.pem')
 context_client.load_verify_locations(cafile='ssl/ca.pem')
+context_client.check_hostname= False
 
 #----------Server context--------
 context_server = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context_server.load_cert_chain(certfile='ssl/cert.pem', keyfile='ssl/key.pem')
 context_server.check_hostname = True
 context_server.verify_mode = ssl.CERT_REQUIRED
-
-host = 'localhost'
+host = '127.0.0.1'
 port = 8080
 # hostname_server = socket.getfqdn()
 
@@ -105,33 +105,31 @@ def request(_client_socket):
                             try:
                                 print('Performing handshake')
                                 client_socket.do_handshake()
+                                print('Handshake done')
                             except Exception as e:
                                 print(e,'+++++++++++')
                                 print('Handshake failed')
                             data = client_socket.recv(4096)
-                            print(data)
-                            secure_web.sendall(message)
-                            while True:
-                                try:
-                                    response= secure_web.recv(4096)
-                                    if not response:
-                                        break
+                            secure_web.sendall(data)
+                            try:
+                                while True:
+                                    response = secure_web.recv(4096)                        
                                     client_socket.sendall(response)
-                                    print(response)
-                                except Exception as e:
-                                    print(e)
-                                    break
-                                finally:
-                                    secure_web.shutdown(socket.SHUT_RDWR)
-                                    secure_web.close()
-                                    client_socket.shutdown(socket.SHUT_RDWR)
-                                    client_socket.close()
+                            except Exception as e:
+                                print("aaaaaaaaaaaaaaaaaaaaaaaa")
+                                print(e)
+                                break
+                            finally:
+                                secure_web.shutdown(socket.SHUT_RDWR)
+                                secure_web.close()
+                                # client_socket.shutdown(socket.SHUT_RDWR)
+                                client_socket.close()
             _client_socket.close()  
 
         except ConnectionError:
             print('Connection error')
         finally:
-            _client_socket.shutdown(socket.SHUT_RDWR)
+            # _client_socket.shutdown(socket.SHUT_RDWR)
             _client_socket.close()  
 
 
@@ -141,25 +139,24 @@ def start():
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
         server.bind((host,port))
         server.listen(5)
-        # secure_server = context_server.wrap_socket(server, server_hostname='localhost')
+        # secure_server = context_server.wrap_socket(server, server_hostname='')
         # secure_server.bind((host,port))
         # secure_server.listen(5)
         print('[SERVER]  The server is on...')
         # server = context.wrap_socket(server, server_side=True)
-        try:
-            signal.signal(signal.SIGINT, signal_handler)
-            while True:
-                try:
-                    try:
-                        _client_socket, client_addr = server.accept()
-                        threading.Thread(target=request, args=(_client_socket,), daemon=True).start()
-                    except Exception as e:
-                        print(e,'-------------------')
-                except ConnectionResetError:
-                    print("[ERROR] Connection reset")
-                except OSError as e :
-                    raise 
-        except KeyboardInterrupt:
+        signal.signal(signal.SIGINT, signal_handler)
+        while True:
+            try:
+
+                _client_socket, client_addr = server.accept()
+                threading.Thread(target=request, args=(_client_socket,), daemon=True).start()
+            except ConnectionResetError:
+                print("[ERROR] Connection reset")
+            except OSError as e :
+                raise
+            except Exception as e:
+                print(e)
+            except KeyboardInterrupt:
                 print('[SERVER] The server is stopping...')
                 exit(0)
 
