@@ -758,125 +758,152 @@
                     
 #             destination_server.close()
 
-import socket
-import ssl
-import time
-import threading
+# import socket
+# import ssl
+# import time
+# import threading
 
-hostname = 'www.example.com'
-context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-context.load_cert_chain(certfile='ssl/cert.pem', keyfile='ssl/key.pem')
-host = 'localhost'
-port = 8081
-# hostname_server = socket.getfqdn()
+# hostname = 'www.example.com'
+# context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+# context.load_cert_chain(certfile='ssl/cert.pem', keyfile='ssl/key.pem')
+# host = 'localhost'
+# port = 8081
+# # hostname_server = socket.getfqdn()
 
-def extract_port_host_method_request(message):
-    try:
-        message_ = _decode(message)
-        message_ = message_.split("\n")   
+# def extract_port_host_method_request(message):
+#     try:
+#         message_ = _decode(message)
+#         message_ = message_.split("\n")   
 
-                #----Host_Web----
-        host_web = message_[1]
-        host_web = host_web.split(':')
-        host_web = host_web[1]
-        host_web = host_web.split(' ')
-        host_web = host_web[1]
-        host_web = host_web.strip('\r')
-        try:
-            ip_web = f"'{socket.gethostbyname(host_web)}'"
-        except:
-            print("Wrong domain name entered: [",host_web,"]" )     
+#                 #----Host_Web----
+#         host_web = message_[1]
+#         host_web = host_web.split(':')
+#         host_web = host_web[1]
+#         host_web = host_web.split(' ')
+#         host_web = host_web[1]
+#         host_web = host_web.strip('\r')
+#         try:
+#             ip_web = f"'{socket.gethostbyname(host_web)}'"
+#         except:
+#             print("Wrong domain name entered: [",host_web,"]" )     
     
 
-        return host_web
-    except:
-        return None
+#         return host_web
+#     except:
+#         return None
     
-#-------------Decoding the message since some have different format--------------    
-def _decode(message:any):
-    try:
-        message = message.decode('utf-8')
-        return message
-    except UnicodeDecodeError:
-        try:
-            message = message.decode('ISO-8859-1')
-            return message
-        except UnicodeDecodeError:
-            try:
-                message = message.decode('Windows-1252')
-                return message
-            except:
-                return None 
+# #-------------Decoding the message since some have different format--------------    
+# def _decode(message:any):
+#     try:
+#         message = message.decode('utf-8')
+#         return message
+#     except UnicodeDecodeError:
+#         try:
+#             message = message.decode('ISO-8859-1')
+#             return message
+#         except UnicodeDecodeError:
+#             try:
+#                 message = message.decode('Windows-1252')
+#                 return message
+#             except:
+#                 return None 
 
-#-------------Remove the error int the request due to the domain being wronged-----------
-def _remove(message:bytes):
-    message = message.decode('utf-8')
-    message = message.split(' ')
-    message[1] = '/'
-    message = ' '.join(message)
-    message = b'' + message.encode()
-    return message
+# #-------------Remove the error int the request due to the domain being wronged-----------
+# def _remove(message:bytes):
+#     message = message.decode('utf-8')
+#     message = message.split(' ')
+#     message[1] = '/'
+#     message = ' '.join(message)
+#     message = b'' + message.encode()
+#     return message
 
 
 #------------Stopping the server manually-----------------
-def signal_handler(signal, frame):
-    print('[SERVER] Stopping the server...')
-    exit(0)
+# def signal_handler(signal, frame):
+#     print('[SERVER] Stopping the server...')
+#     exit(0)
 
 
-def request(client_socket):
-    if client_socket.fileno() != -1:
-        while True:
-            try:
-                message = client_socket.recv(1024)
-            except Exception as e:
-                break
+# def request(client_socket):
+#     if client_socket.fileno() != -1:
+#         while True:
+#             try:
+#                 message = client_socket.recv(1024)
+#             except Exception as e:
+#                 break
 
-            if not message:
-                break
+#             if not message:
+#                 break
             
-            #------Obtention du port, du methode et de l'adresse host------
-            host_web=  extract_port_host_method_request(message)
-        print('A client is connected')
-        with socket.create_connection((hostname, 443)) as sock:
-            with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                ssock.send(b'GET / HTTP/1.1\r\nHost: ' + hostname.encode()+ b'\r\n\r\n')
-                response = bytes()
-                while True:
-                    try:
-                        data= ssock.recv(1024)
-                        if not data:
-                            break
-                        response += data
-                        client_socket.sendall(data)
-                        print(response)
-                    except Exception as e:
-                        print(e)
-                        break
-                    finally:
-                        sock.close()    
+#             #------Obtention du port, du methode et de l'adresse host------
+#             host_web=  extract_port_host_method_request(message)
+#         print('A client is connected')
+#         with socket.create_connection((hostname, 443)) as sock:
+#             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+#                 ssock.send(b'GET / HTTP/1.1\r\nHost: ' + hostname.encode()+ b'\r\n\r\n')
+#                 response = bytes()
+#                 while True:
+#                     try:
+#                         data= ssock.recv(1024)
+#                         if not data:
+#                             break
+#                         response += data
+#                         client_socket.sendall(data)
+#                         print(response)
+#                     except Exception as e:
+#                         print(e)
+#                         break
+#                     finally:
+#                         sock.close()    
 
 
-#-------------Starting proxy------------------
-def start():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-        server.bind((host,port))
-        server.listen(1)
-        print('[SERVER]  The server is on...')
-        while True:
-            try:
-                client_socket, client_addr = server.accept()
-                # client_socket = context.wrap_socket(client_socket, server_side=True)
-                threading.Thread(target=request, args=(client_socket,), daemon=True).start()
-                signal.signal(signal.SIGINT, signal_handler)
-            except ConnectionResetError:
-                print("[ERROR] Connection reset")
-            except OSError as e :
-                raise 
-            except KeyboardInterrupt:
-                print('[SERVER] The server is stopping...')
-                exit(0)
+# #-------------Starting proxy------------------
+# def start():
+#     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+#         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+#         server.bind((host,port))
+#         server.listen(1)
+#         print('[SERVER]  The server is on...')
+#         while True:
+#             try:
+#                 client_socket, client_addr = server.accept()
+#                 # client_socket = context.wrap_socket(client_socket, server_side=True)
+#                 threading.Thread(target=request, args=(client_socket,), daemon=True).start()
+#                 signal.signal(signal.SIGINT, signal_handler)
+#             except ConnectionResetError:
+#                 print("[ERROR] Connection reset")
+#             except OSError as e :
+#                 raise 
+#             except KeyboardInterrupt:
+#                 print('[SERVER] The server is stopping...')
+#                 exit(0)
 
 
-start()
+# start()
+
+import socket
+import ssl
+import time
+import certifi
+import os 
+
+# Context creation
+ssl_context = ssl.create_default_context()
+ssl_context.verify_mode = ssl.CERT_REQUIRED
+
+ssl_context.check_hostname = False
+
+# Create an SSLSocket
+client_socket = socket.socket()
+secure_client_socket = ssl_context.wrap_socket(client_socket, do_handshake_on_connect=False)
+
+ssl_context.load_verify_locations(cafile=os.path.abspath(certifi.where()), capath=None, cadata=None)
+# Only connect, no handshake
+t1 = time.time()
+retval = secure_client_socket.connect(("example.org", 443))
+print("Time taken to establish the connection: {:2.3f}".format(time.time() - t1))
+
+# Explicit handshake
+t3 = time.time()
+secure_client_socket.do_handshake()
+print("Time taken for SSL handshake: {:2.3f}".format(time.time() - t3))
