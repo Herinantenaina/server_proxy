@@ -6,14 +6,20 @@ import certifi
 import subprocess
 import os
 import re
+import time
+# from concurrent.futures import ThreadPoolExecutor
 
 #----------Web context-----------
 context_web = ssl.create_default_context()
-context_web.load_verify_locations('ssl/ca.pem', certifi.where())
+context_web.load_verify_locations('ca.pem', certifi.where())
 
 
 host = '127.0.0.1'
-port = 8080
+port = 443
+
+# Liste des sites web
+website = ['longdogechallenge.com', 'optical.toys', 'theuselessweb.com', 'paint.toys', 'example.com']
+qwebsite = ['www.youtube.com', 'github.com']
 # hostname_server = socket.getfqdn()
 
 #-------------Searching the openssl.exe directory------------
@@ -26,9 +32,9 @@ def openssl_path():
             
     raise FileNotFoundError("OpenSSL n'existe sur se système")
 
-def extract_port_host_method_request(message):
+def extract_port_host_method_request(message:bytes):
     try:
-        message_ = _decode(message)
+        message_ = message.decode('utf-8')
         message_ = message_.split("\n")   
 
                 #----Host_Web----
@@ -37,7 +43,7 @@ def extract_port_host_method_request(message):
         host_web = host_web[1]
         host_web = host_web.split(' ')
         host_web = host_web[1]
-        host_web = host_web.strip('\r')
+        host_web = str(host_web.strip('\r'))
         try:
             f"'{socket.gethostbyname(host_web)}'"
         except:
@@ -50,12 +56,12 @@ def extract_port_host_method_request(message):
 
 #-------------Mise à jour du extfile.cnf------------
 def suppression_doublon(host_web):
-    if host_web in open('ssl/extfile.cnf', 'r').read():
+    if host_web in open('extfile.cnf', 'r').read():
         count = 0
         line_to_remove = 0
         numberOfLines  = 0
         lines = 0
-        with open('ssl/extfile.cnf', 'r') as file:
+        with open('extfile.cnf', 'r') as file:
             lines = file.readlines()
             for line in lines:
                 numberOfLines += 1
@@ -74,33 +80,17 @@ def suppression_doublon(host_web):
                         lines[count - 1] = line
 
                 print('DNS.',line_to_remove - 4,' supprimé')        
-        with open('ssl/extfile.cnf', 'w') as file:
+        with open('extfile.cnf', 'w') as file:
             file.writelines(lines)
 
-#-------------Decoding the message since some have different format--------------    
-def _decode(message:any):
-    try:
-        message = message.decode('utf-8')
-        return message
-    except UnicodeDecodeError:
-        try:
-            message = message.decode('ISO-8859-1')
-            return message
-        except UnicodeDecodeError:
-            try:
-                message = message.decode('Windows-1252')
-                return message
-            except:
-                return None 
-
-#------------Modification du ssl certificate----------
+#------------Modification du ssl certificate si le website n'est pas encore enregistré dans le certificat----------
 def ssl_modification(host_web):
     found = False
-    if host_web not in open('ssl/extfile.cnf', 'r').read():
-        with open('ssl/extfile.cnf', 'r') as file:
-            lines = file.read()
+    if host_web not in open('extfile.cnf', 'r').read():
+        with open('extfile.cnf', 'r') as extfile:
+            lines = extfile.read()
             numberOfLines = len(lines.splitlines()) + 1
-        with open('ssl/extfile.cnf', 'a') as extfile:
+        with open('extfile.cnf', 'a') as extfile:
             extfile.write(f'\nDNS.{numberOfLines - 4} = {host_web}')
         found = True
     
@@ -116,117 +106,267 @@ def ssl_modification(host_web):
         except Exception as e:
             print(e,'----------------')
 
-#-------------Remove the error int the request due to the domain being wronged-----------
-def _remove(message:bytes):
-    message = message.decode('utf-8')
-    message = message.split(' ')
-    message[0] = 'GET'
-    message[1] = '/'
-    message = ' '.join(message)
-    message = b'' + message.encode()
-    return message
-
 #------------Stopping the server manually-----------------
 def signal_handler(signal, frame):
     print('[SERVER] Stopping the server...')
     exit(0)
 
-#------------Creation of the client context
+#------------Creation of the client context-------------
 def _context():
     context_client = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context_client.load_cert_chain(certfile='ssl/cert.pem', keyfile='ssl/key.pem')
-    context_client.load_verify_locations(cafile='ssl/ca.pem')
+    context_client.load_cert_chain(certfile='cert.pem', keyfile='key.pem')
+    context_client.load_verify_locations(cafile='ca.pem')
     context_client.minimum_version = ssl.TLSVersion.TLSv1_2
     context_client.check_hostname= False
+    context_client.set_ciphers('ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:AES-CBC:')
     return context_client
 
-def request(_client_socket):
-    if _client_socket.fileno() != -1:
+#-------Maka content length à chaque sendall()--------
+def actual_contentLenght(fragment:bytes,first_fragment:bool):
+    if first_fragment:
         try:
-            while True:
-                try:
-                    message = _client_socket.recv(1024)
-                except Exception as e:
-                    print(e)
-                    break
-                
-                if not message:
-                    break
-                
-                #------Obtention du port, du methode et de l'adresse host------
-                host_web =  extract_port_host_method_request(message)
-                if 'longdogechallenge' in host_web or host_web == 'optical.toys' or host_web == 'paint.toys' and host_web != None:
-                    message = _remove(message)
-                    print('A client is connected')
-                    print(host_web)
-                    print(message)
-                    
-                    #---------Check ra efa anaty ssl certificate ilay domain; sinon ajouter-na--------
-                    ssl_modification(host_web)
+            fragment.decode('utf-8')
+            return 0
+        except:
+            pos = fragment.find(b'\r\n')
+            not_ssl = fragment[0:pos]
+            length = len(fragment) - len(not_ssl) - 4
+ 
+        return length
+    else:
+        return len(fragment)
+    
+#-----------Mitady content_length an ilay encrypted data-------------
+def content_length_ssl_data(fragment:bytes):
+    position1 = fragment.find(b'Content-Length: ')
+    position2 = fragment.find(b'Content-Type: ')
+    if position1 > position2:
+        position2 = position1 + position2
+        position1 = position2 - position1
+        position2 = position2 - position1 + 25
+    buffer = fragment[position1:position2]
+    buffer = buffer.decode('utf-8')
+    buffer = buffer.split(' ')
+    k = 0
+    for content in buffer:
+        k += 1
+    buffer = buffer[k-1]
+    return buffer
 
-                    #---------Client context---------
-                    context_client = _context()
-                    with socket.create_connection((host_web, 443)) as web:
-                        with context_web.wrap_socket(web, server_hostname=host_web) as secure_web:
-                            _client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
-                            client_socket = context_client.wrap_socket(_client_socket, server_side=True, do_handshake_on_connect=False)
-                            try:
-                                print('Performing handshake')
-                                client_socket.do_handshake()
-                                print('Handshake done')
-                            except Exception as e:
-                                print(e)
-                                print('Handshake failed')   
-                            
-                            data = client_socket.recv(4096)
-                            secure_web.sendall(data)
-                            x = 0
-                            while True:
-                                try:
-                                    response = secure_web.recv(4096)
-                                    if response:
-                                        print(response)
-                                    x += 1
-                                    if x > 2 : break
-                                    client_socket.sendall(response)
+#----------To say that the data are sent in chunks---------
+def data_sent_in_chunks(fragment:bytes):
+    pos = fragment.find(b'Content')
+    x = b'Transfer-Encoding: chunked\r\n'
+    fragment = fragment[:pos] + x + fragment[pos:]
+    return fragment
+
+#----------Manala an ilay content length anaty https response-----------
+def remove_content_length(fragment:bytes):
+    try:
+        fragment.find(b'Content-Length')
+        fragment = fragment.split(b'\r\n')
+        k = 0
+        for content in fragment:
+            if b'Content-Length' in content:
+                del fragment[k]
+            else:
+                k += 1
+
+        fragment = b'\r\n'.join(fragment)
+        return fragment
+
+    except Exception as e:
+        return fragment
+
+#---------Maka ab ilay header sy ilay data am ilay fragment indrindra--------
+def header_body(fragment):
+    pos = fragment.find(b'\r\n\r\n')
+    header = fragment[:pos + 4]
+    fragment = fragment[pos + 4:]
+    #Convert the length in hexadecimal format
+    fragmentLenght = (hex(len(fragment))[2:] + '\r\n').encode()
+    fragment = fragmentLenght + fragment + ('\r\n').encode()
+    return header, fragment
+
+#----------------------------------
+#---------Client handler-----------
+#----------------------------------
+def request(_client_socket:socket, website):
+    if _client_socket.fileno() != -1:
+        # _client_socket.setblocking(False)
+            try:
+                while True:
+                    #---------Tokony asina set timeout eto--------
+                    try:
+                        message = _client_socket.recv(1024)
+                    except ConnectionError:
+                        print("Connection error while receiving the client request")
+                        _client_socket.close()
+                        break
+                    except Exception as e:
+                        print(e)
+                        _client_socket.close()
+                        break
+                    #------Si message vide------
+                    if not message:
+                        _client_socket.close()
+                        break
+                
+                    #------Obtention du port, du methode et de l'adresse host------
+                    host_web =  extract_port_host_method_request(message)
+                    if str(host_web) in website and host_web != None:
+                        print('A client is connected')
+                        print(host_web)
+
+                        #---------Check ra efa anaty ssl certificate ilay domain; sinon ajouter-na--------
+                        ssl_modification(host_web)
+
+                        #---------Client context---------
+                        context_client = _context()
+                        with socket.create_connection((host_web, 443)) as web:
+                            with context_web.wrap_socket(web, server_hostname=host_web) as secure_web:
+                                _client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+                                client_socket = context_client.wrap_socket(_client_socket, server_side=True, do_handshake_on_connect=False)
+                    
+                                # -----------------------------
+                                try:#------Ito ilay véritable https request------
+                                    data = client_socket.recv(1024)
+                                    print('Ito ny HTTPS request:\n',data)
                                 except Exception as e:
-                                    print(e, '\nNo data sent by the web server')
+                                    print(e,'   Error while receiving the request')
+
+                                #-----Handshake-----
+                                try:
+                                    t1 = time.time()
+                                    print('Performing handshake')
+                                    client_socket.do_handshake()
+                                    print("Handshake done in {:2.3f}".format(time.time() - t1))
+                                except Exception as e:
+                                    print(e)
+                                    print('Handshake failed')
+                                    _client_socket.close()
+                                    secure_web.close()
                                     break
-                            suppression_doublon(str(host_web))
-                            client_socket.close()
-                            secure_web.close()
-            _client_socket.close()  
-        except ConnectionError:
-            print('Connection error')
-        finally:
-            # _client_socket.shutdown(socket.SHUT_RDWR)
-            _client_socket.close()  
+                                    
+                                secure_web.sendall(data)
+
+                                secure_web.settimeout(10)
+                                t0 = time.time()
+                                total_content_length = 0
+                                actual_content_length = 0
+                                first_fragment = True
+                                i = 0
+                                while True:
+                                    # Receive the encrypted data from the web server
+                                    try:
+                                        fragment = secure_web.recv(4096)
+                                    except socket.timeout:
+                                        print('Timeout')
+                                        client_socket.close()
+                                        secure_web.close()
+                                        break
+                                    except Exception as e:
+                                        print(e,'++++++++++++++++++++++++++++++')
+                                        secure_web.close()
+                                        client_socket.close()
+                                        break
+
+                
+                                    if len(fragment) == 0 or not fragment or fragment == b'':#----- Si response est vide-----
+                                        fragment = b'0\r\n\r\n' # Last chunk to be sent so the browser knows that there will be no more chunk after this
+                                        client_socket.sendall(fragment)                                        
+                                        client_socket.close()
+                                        secure_web.close()
+                                        break
+                                    
+
+                                    if total_content_length == 0:#-----fragment voalohany indrindra-------
+                                        fragment = remove_content_length(fragment)
+                                        fragment = data_sent_in_chunks(fragment)
+                                        total_content_length = content_length_ssl_data(fragment)           
+                                        header,fragment = header_body(fragment)
+                                        print(header)
+                                        print(fragment)
+                                        client_socket.sendall(header)
+                                        # time.sleep(0.5)
+                                        client_socket.sendall(fragment)
+                                    
+                                    #-------------Hi check ra efa tratra ilay content_lenght----------
+                                    actual_content_length += actual_contentLenght(fragment, first_fragment)
+                                    if actual_content_length == total_content_length:
+                                        client_socket.sendall(fragment)
+                                        print('-------------------------\n',fragment)
+                                        fragment = b'0\r\n\r\n' # Last chunk to be sent so the browser knows that there will be no more chunk after this
+                                        print('-------------------------\n',fragment)
+                                        client_socket.sendall(fragment)
+                                        print('Last chunk sent')
+                                        client_socket.close()
+                                        secure_web.close()
+                                        break
+
+
+
+                                    #------------Sending the data to the client socket(browser)-------------
+                                    if not first_fragment:
+                                        try:
+                                            fragmentLenght = (hex(len(fragment))[2:] + '\r\n').encode() # Protocol for using
+                                            fragment = fragmentLenght + fragment + ('\r\n').encode()# the transfer encoding: chunks
+                                            print('-------------------------\n',fragment)
+                                            client_socket.sendall(fragment)
+                                            print("Response sent in {:2.3f}".format(time.time() - t0))
+                                        except ConnectionError:
+                                            print('Connection error ---------------------')
+                                        except Exception as e:
+                                            print(f'------{e}+++++++') 
+
+                                    first_fragment = False                               
+
+                                    
+                                print('Ito ilay content length: ', actual_content_length)  
+                                suppression_doublon(str(host_web))
+                                break
+                
+            except WindowsError:
+                print('Windows error')
+                _client_socket.close()
+            finally:
+                _client_socket.close()
+    else:
+        _client_socket.close()
 
 
 #-------------Starting proxy------------------
-def start():
+def start(website):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
         server.bind((host,port))
-        server.listen(1)
-        # secure_server = context_server.wrap_socket(server, server_side=True)
-        # secure_server.bind((host,port))
-        # secure_server.listen(5)
+        server.listen(10)
+        website = ' '.join(website) 
         print('[SERVER]  The server is on...')
         
         while True:
             try:
                 _client_socket, client_addr = server.accept()
+        
                 signal.signal(signal.SIGINT, signal_handler)
-                threading.Thread(target=request, args=(_client_socket,), daemon=True).start()
+                thread_ = threading.Thread(target=request, args=(_client_socket, website), daemon=False)
+                thread_.start()  
+                                         
+
             except ConnectionResetError:
                 print("[ERROR] Connection reset")
+                _client_socket.close()
             except OSError as e :
+                _client_socket.close()
                 raise
             except Exception as e:
                 print(e)
+                _client_socket.close()
             except KeyboardInterrupt:
                 print('[SERVER] The server is stopping...')
+                _client_socket.close()
                 exit(0)
 
-start()
+if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
+    start(website)
