@@ -151,9 +151,13 @@ def content_length_ssl_data(fragment:bytes):
     for content in buffer:
         k += 1
     buffer = buffer[k-1]
-    return buffer
+    try:
+        return int(buffer)
+    except:
+        print('Voici le buffer qui derange: [',buffer,']')
+        return 0
 
-#----------To say that the data are sent in chunks---------
+#----------To make the data to be sent in chunks---------
 def data_sent_in_chunks(fragment:bytes):
     pos = fragment.find(b'Content')
     x = b'Transfer-Encoding: chunked\r\n'
@@ -179,15 +183,17 @@ def remove_content_length(fragment:bytes):
         return fragment
 
 #---------Maka ab ilay header sy ilay data am ilay fragment indrindra--------
-def header_body(fragment):
+def header_body(fragment:bytes):
     pos = fragment.find(b'\r\n\r\n')
     header = fragment[:pos + 4]
     fragment = fragment[pos + 4:]
-    #Convert the length in hexadecimal format
-    fragmentLenght = (hex(len(fragment))[2:] + '\r\n').encode()
-    fragment = fragmentLenght + fragment + ('\r\n').encode()
     return header, fragment
 
+#--------Chunking fragment----------
+def chunking_the_fragment(fragment:bytes):
+    fragmentLenght = (hex(len(fragment))[2:] + '\r\n').encode() # Protocol for using
+    fragment = fragmentLenght + fragment + ('\r\n').encode()
+    return fragment
 #----------------------------------
 #---------Client handler-----------
 #----------------------------------
@@ -235,6 +241,9 @@ def request(_client_socket:socket, website):
                                 except Exception as e:
                                     print(e,'   Error while receiving the request')
 
+                                if data == b'' or not data or data == None or len(data) <= 0:
+                                    break
+
                                 #-----Handshake-----
                                 try:
                                     t1 = time.time()
@@ -255,7 +264,6 @@ def request(_client_socket:socket, website):
                                 total_content_length = 0
                                 actual_content_length = 0
                                 first_fragment = True
-                                i = 0
                                 while True:
                                     # Receive the encrypted data from the web server
                                     try:
@@ -281,21 +289,33 @@ def request(_client_socket:socket, website):
                                     
 
                                     if total_content_length == 0:#-----fragment voalohany indrindra-------
+                                        total_content_length = content_length_ssl_data(fragment)    
                                         fragment = remove_content_length(fragment)
-                                        fragment = data_sent_in_chunks(fragment)
-                                        total_content_length = content_length_ssl_data(fragment)           
+                                        fragment = data_sent_in_chunks(fragment)       
                                         header,fragment = header_body(fragment)
                                         print(header)
-                                        print(fragment)
                                         client_socket.sendall(header)
                                         # time.sleep(0.5)
-                                        client_socket.sendall(fragment)
                                     
-                                    #-------------Hi check ra efa tratra ilay content_lenght----------
-                                    actual_content_length += actual_contentLenght(fragment, first_fragment)
-                                    if actual_content_length == total_content_length:
-                                        client_socket.sendall(fragment)
+
+
+                                    #------------Sending the data to the client socket(browser)-------------
+                                    try:
+                                        fragment = chunking_the_fragment(fragment)# the transfer encoding: chunks
                                         print('-------------------------\n',fragment)
+                                        client_socket.sendall(fragment)
+                                        print("Response sent in {:2.3f}".format(time.time() - t0))
+                                    except ConnectionError:
+                                        print('Connection error ---------------------')
+                                    except Exception as e:
+                                        print(f'------{e}+++++++') 
+
+
+                                                     
+                                     #-------------Hi check ra efa tratra ilay content_lenght----------
+                                    actual_content_length += actual_contentLenght(fragment, first_fragment)
+                                    first_fragment = False
+                                    if actual_content_length >= total_content_length:
                                         fragment = b'0\r\n\r\n' # Last chunk to be sent so the browser knows that there will be no more chunk after this
                                         print('-------------------------\n',fragment)
                                         client_socket.sendall(fragment)
@@ -303,24 +323,6 @@ def request(_client_socket:socket, website):
                                         client_socket.close()
                                         secure_web.close()
                                         break
-
-
-
-                                    #------------Sending the data to the client socket(browser)-------------
-                                    if not first_fragment:
-                                        try:
-                                            fragmentLenght = (hex(len(fragment))[2:] + '\r\n').encode() # Protocol for using
-                                            fragment = fragmentLenght + fragment + ('\r\n').encode()# the transfer encoding: chunks
-                                            print('-------------------------\n',fragment)
-                                            client_socket.sendall(fragment)
-                                            print("Response sent in {:2.3f}".format(time.time() - t0))
-                                        except ConnectionError:
-                                            print('Connection error ---------------------')
-                                        except Exception as e:
-                                            print(f'------{e}+++++++') 
-
-                                    first_fragment = False                               
-
                                     
                                 print('Ito ilay content length: ', actual_content_length)  
                                 suppression_doublon(str(host_web))
