@@ -18,7 +18,7 @@ host = '127.0.0.1'
 port = 443
 
 # Liste des sites web
-website = ['longdogechallenge.com', 'optical.toys', 'theuselessweb.com', 'paint.toys', 'example.com']
+website = ['cdn.intergient.com','font.googleapis.com','www.googletagmanager.com','longdogechallenge.com', 'optical.toys', 'theuselessweb.com', 'paint.toys', 'example.com']
 qwebsite = ['www.youtube.com', 'github.com']
 # hostname_server = socket.getfqdn()
 
@@ -194,6 +194,20 @@ def chunking_the_fragment(fragment:bytes):
     fragmentLenght = (hex(len(fragment))[2:] + '\r\n').encode() # Protocol for using
     fragment = fragmentLenght + fragment + ('\r\n').encode()
     return fragment
+
+#-------Check si l'https réponse sera chunked-----
+def check_if_chunk_method(fragment):
+    try: 
+        pos = fragment.find(b'chunked')
+        fragment = fragment[:pos +7]
+        fragment = fragment.decode('utf-8')
+        if 'chunked' in fragment:
+            return True
+        else:
+            return False
+    except:
+        return False
+
 #----------------------------------
 #---------Client handler-----------
 #----------------------------------
@@ -231,7 +245,7 @@ def request(_client_socket:socket, website):
                         context_client = _context()
                         with socket.create_connection((host_web, 443)) as web:
                             with context_web.wrap_socket(web, server_hostname=host_web) as secure_web:
-                                _client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+                                _client_socket.sendall(b'HTTP/1.1 202 OK\r\n\r\n')
                                 client_socket = context_client.wrap_socket(_client_socket, server_side=True, do_handshake_on_connect=False)
                     
                                 # -----------------------------
@@ -252,48 +266,56 @@ def request(_client_socket:socket, website):
                                     print("Handshake done in {:2.3f}".format(time.time() - t1))
                                 except Exception as e:
                                     print(e)
-                                    print('Handshake failed')
+                                    print('Handshake failed: ',host_web)
                                     _client_socket.close()
                                     secure_web.close()
                                     break
                                     
                                 secure_web.sendall(data)
 
-                                secure_web.settimeout(10)
+                                secure_web.settimeout(5)
                                 t0 = time.time()
                                 total_content_length = 0
                                 actual_content_length = 0
+                                is_chunk = False
                                 first_fragment = True
                                 while True:
                                     # Receive the encrypted data from the web server
                                     try:
-                                        fragment = secure_web.recv(4096)
+                                        fragment = secure_web.recv(9000)
                                     except socket.timeout:
+                                        client_socket.sendall(b'0\r\n\r\n')
+                                        print(b'0\r\n\r\n')
                                         print('Timeout')
+                                        client_socket.shutdown(socket.SHUT_WR)  
                                         client_socket.close()
                                         secure_web.close()
                                         break
                                     except Exception as e:
                                         print(e,'++++++++++++++++++++++++++++++')
+                                        client_socket.shutdown(socket.SHUT_WR)  
                                         secure_web.close()
                                         client_socket.close()
                                         break
 
                 
                                     if len(fragment) == 0 or not fragment or fragment == b'':#----- Si response est vide-----
+                                        print(f'Réponse vide[{host_web}]: ',fragment)
                                         fragment = b'0\r\n\r\n' # Last chunk to be sent so the browser knows that there will be no more chunk after this
-                                        client_socket.sendall(fragment)                                        
+                                        client_socket.sendall(fragment)  
+                                        client_socket.shutdown(socket.SHUT_WR)                                     
                                         client_socket.close()
                                         secure_web.close()
                                         break
                                     
 
                                     if total_content_length == 0:#-----fragment voalohany indrindra-------
+                                        is_chunk = check_if_chunk_method(fragment)
                                         total_content_length = content_length_ssl_data(fragment)    
                                         fragment = remove_content_length(fragment)
                                         fragment = data_sent_in_chunks(fragment)       
                                         header,fragment = header_body(fragment)
-                                        print(header)
+                                        print(f'{host_web}\n{header}')
                                         client_socket.sendall(header)
                                         # time.sleep(0.5)
                                     
@@ -301,28 +323,32 @@ def request(_client_socket:socket, website):
 
                                     #------------Sending the data to the client socket(browser)-------------
                                     try:
-                                        fragment = chunking_the_fragment(fragment)# the transfer encoding: chunks
-                                        print('-------------------------\n',fragment)
+                                        if not is_chunk:
+                                            print('Modified')
+                                            fragment = chunking_the_fragment(fragment)# encode the fragment to be chunked
+                                        else:
+                                            print('Not modified')
+                                        print(f'-----------{host_web}--------------\n',fragment)
                                         client_socket.sendall(fragment)
                                         print("Response sent in {:2.3f}".format(time.time() - t0))
                                     except ConnectionError:
                                         print('Connection error ---------------------')
                                     except Exception as e:
-                                        print(f'------{e}+++++++') 
+                                        print(f'------{e}:{host_web}+++++++') 
 
 
                                                      
                                      #-------------Hi check ra efa tratra ilay content_lenght----------
-                                    actual_content_length += actual_contentLenght(fragment, first_fragment)
-                                    first_fragment = False
-                                    if actual_content_length >= total_content_length:
-                                        fragment = b'0\r\n\r\n' # Last chunk to be sent so the browser knows that there will be no more chunk after this
-                                        print('-------------------------\n',fragment)
-                                        client_socket.sendall(fragment)
-                                        print('Last chunk sent')
-                                        client_socket.close()
-                                        secure_web.close()
-                                        break
+                                    # actual_content_length += actual_contentLenght(fragment, first_fragment)
+                                    # first_fragment = False
+                                    # if actual_content_length >= total_content_length:
+                                    #     fragment = b'0\r\n\r\n' # Last chunk to be sent so the browser knows that there will be no more chunk after this
+                                    #     print('-------------------------\n',fragment)
+                                    #     client_socket.sendall(fragment)
+                                    #     print('Last chunk sent')
+                                    #     client_socket.close()
+                                    #     secure_web.close()
+                                    #     break
                                     
                                 print('Ito ilay content length: ', actual_content_length)  
                                 suppression_doublon(str(host_web))
@@ -330,10 +356,22 @@ def request(_client_socket:socket, website):
                 
             except WindowsError:
                 print('Windows error')
+                try:
+                    client_socket.shutdown(socket.SHUT_WR)
+                except:
+                    pass
                 _client_socket.close()
             finally:
+                try:
+                    client_socket.shutdown(socket.SHUT_WR)
+                except:
+                    pass 
                 _client_socket.close()
     else:
+        try:
+            client_socket.shutdown(socket.SHUT_WR)
+        except:
+            pass  
         _client_socket.close()
 
 
