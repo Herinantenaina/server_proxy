@@ -7,6 +7,7 @@ import subprocess
 import os
 import re
 import time
+import json
 # from concurrent.futures import ThreadPoolExecutor
 
 #----------Web context-----------
@@ -18,9 +19,11 @@ host = '127.0.0.1'
 port = 443
 
 # Liste des sites web
-website = ['font.googleapis.com','longdogechallenge.com', 'optical.toys', 'theuselessweb.com', 'paint.toys', 'example.com', 'puginarug.com']
-qwebsite = ['www.googletagmanager.com']
-# hostname_server = socket.getfqdn()
+website = ['font.googleapis.com','longdogechallenge.com', 'www.googletagmanager.com', 'optical.toys', 'theuselessweb.com', 'paint.toys', 'example.com', 'puginarug.com']
+website = ['www.googletagmanager.com','securepubads.g.doubleclick.net' ,'adsense.google.com', 'www.media.net', 'advertising.amazon.com', 'www.taboola.com', 'www.outbrain.com',]
+
+#--------Pour éviter l'ecriture simultanée d'un fichier par les differents thread
+file_lock = threading.Lock()
 
 #-------------Searching the openssl.exe directory------------
 def openssl_path():
@@ -121,26 +124,27 @@ def modification_du_derniere_ligne():
 
 #------------Modification du ssl certificate si le website n'est pas encore enregistré dans le certificat----------
 def ssl_modification(host_web):
-    found = False
-    if host_web not in open('extfile.cnf', 'r').read():
-        with open('extfile.cnf', 'r') as extfile:
-            lines = extfile.read()
-            numberOfLines = len(lines.splitlines()) + 1
-        with open('extfile.cnf', 'a') as extfile:
-            extfile.write(f'\nDNS.{numberOfLines - 4} = {host_web}')
-        found = True
-    
-    if found:
-        directory = os.getcwd()
-        openSSL_path = openssl_path()
-        directory += '\\ssl'
-        command= f'{openSSL_path}\\openssl.exe x509 -req -sha256 -days 365 -in cert.csr -CA ca.pem -CAkey ca-key.pem -out cert.pem -extfile extfile.cnf -CAcreateserial -passin pass:toto'
+    with file_lock:
+        found = False
+        if host_web not in open('extfile.cnf', 'r').read():
+            with open('extfile.cnf', 'r') as extfile:
+                lines = extfile.read()
+                numberOfLines = len(lines.splitlines()) + 1
+            with open('extfile.cnf', 'a') as extfile:
+                extfile.write(f'\nDNS.{numberOfLines - 4} = {host_web}')
+            found = True
+        
+        if found:
+            directory = os.getcwd()
+            openSSL_path = openssl_path()
+            directory += '\\ssl'
+            command= f'{openSSL_path}\\openssl.exe x509 -req -sha256 -days 365 -in cert.csr -CA ca.pem -CAkey ca-key.pem -out cert.pem -extfile extfile.cnf -CAcreateserial -passin pass:toto'
 
-        try:
-            subprocess.run(command, check=True)
-            print('ssl cerfitication changed')
-        except Exception as e:
-            print(e,'----------------')
+            try:
+                subprocess.run(command, check=True)
+                print('ssl cerfitication changed')
+            except Exception as e:
+                print('[ERREUR LORS DU MODIFICATION DU SSL CERTIFICAT]',e)
 
 #------------Stopping the server manually-----------------
 def signal_handler(signal, frame):
@@ -190,13 +194,7 @@ def content_length_ssl_data(fragment:bytes):
     try:
         return int(buffer)
     except:
-        print('Voici le buffer qui derange: [',buffer,']')
-        return -1
-
-#---------Add X Content type options---------
-def add_X_Content_Type_Options(frag: bytes) -> bytes:
-    frag = frag.replace(b'Content-Type',b'X-Content-Type-Options: nosniff\r\nContent-Type', )
-    return frag
+        return 0
 
 #---------Maka ab ilay header sy ilay data am ilay fragment indrindra--------
 def header_body(fragment:bytes):
@@ -205,22 +203,29 @@ def header_body(fragment:bytes):
     fragment = fragment[pos + 4:]
     return header, fragment
 
-#---------Content length changed---------
-def change_contentLength(fragment:bytes):
-    fragment = fragment.split(b'\r\n')
-    i = 0
-    for content in fragment:
-        if b'Content-Length' in content:
-            content = content.decode('utf-8')
-            content = content.split(' ')
-            content[1] = int(content[1]) + 8004  
-            content[1] = str(content[1])
-            content = ' '.join(content)
-            fragment[i] = content.encode()
-            fragment = b'\r\n'.join(fragment)
-        i += 1     
-    return fragment
+#---------Pour bloquer le bots--------
+def is_bot(header:bytes) -> bool:
+    try:
+        header = header.decode('utf-8')
+        header = header.split('\r\n')
+        for content in header:
+            if 'User-Agent' in content:
+                user_agent = content
+                user_agent = user_agent.replace('User-Agent: ', '')
+                break
 
+        with open('user-agent.json', 'r') as file:
+            data = json.load(file)        
+
+        for content in data:
+            if re.search(content['pattern'], user_agent):
+                return True
+            else: 
+                return False
+        
+    except Exception as e:
+        print('[Bots erreur]',e)
+        return False 
 #----------------------------------
 #---------Client handler-----------
 #----------------------------------
@@ -243,7 +248,7 @@ def request(_client_socket:socket, website):
                 
                     #------Obtention du port, du methode et de l'adresse host------
                     host_web =  extract_port_host_method_request(message)
-                    if str(host_web) in website and host_web != None:
+                    if str(host_web) not in website and host_web != None and 'ads' not in str(host_web):
                         print('A client is connected:', host_web)
                        
 
@@ -275,13 +280,9 @@ def request(_client_socket:socket, website):
 
                                 #-----Handshake-----
                                 try:
-                                    t1 = time.time()
-                                    print('Performing handshake')
                                     client_socket.do_handshake()
-                                    print("Handshake done in {:2.3f}".format(time.time() - t1))
                                 except Exception as e:
-                                    print(e)
-                                    print('Handshake failed: ',host_web)
+                                    print('[Handshake failed]:',e,f'[{host_web}]')
                                     secure_web.close()
                                     break
                                     
@@ -301,10 +302,14 @@ def request(_client_socket:socket, website):
                                     try:
                                         fragment = secure_web.recv(8192)
                                     except socket.timeout:
-                                        print('Timeout') 
+                                        print('Timeout')
+                                        break
+                                    except Exception:
+                                        print('[ERREUR LORS DE LA RECETPION DES DATA]',e)
+                                        break
                                         
 
-                                    if len(fragment) == 0 or not fragment or fragment == b'':#----- Si response est vide-----
+                                    if fragment is None or len(fragment) == 0 or not fragment or fragment == b'':#----- Si response est vide-----
                                         print(f'Réponse vide[{host_web}]')                                  
                                         break
 
@@ -313,13 +318,13 @@ def request(_client_socket:socket, website):
                                             total_content_length = content_length_ssl_data(fragment) 
                                             is_chunk = False        
                                         header,fragment = header_body(fragment)
-                                        # header = add_X_Content_Type_Options(header)
-                                        # header = change_contentLength(header)
+                                        isBot = is_bot(header)
                                         length_header = len(header)
                                         fragment = header + fragment
         
-                                        
-                                    
+                                    if isBot:#----If bot is making the request but not a user
+                                        break    
+
                                     if not is_chunk:
                                         response += fragment
                                         
@@ -342,7 +347,8 @@ def request(_client_socket:socket, website):
                                         # client_socket.send(b'')
                                         print(f'------{e}:{host_web}+++++++') 
 
-                                    
+                                if is_chunk:
+                                    client_socket.send(b'0\r\n\r\n')    
                                 # client_socket.send(b'')
                                 web.close()
                                 suppression_doublon(str(host_web))
