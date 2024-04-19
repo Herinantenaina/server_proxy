@@ -251,7 +251,7 @@ def request(_client_socket:socket, website):
                     #------Obtention du port, du methode et de l'adresse host------
                     host_web =  extract_port_host_method_request(message)
                     if str(host_web) not in website and host_web != None and 'ads' not in str(host_web):
-                    #if str(host_web) == 'www.bing.com':    
+                    #if 'you' in str(host_web):    
                         print('A client is connected:', host_web)
                        
 
@@ -314,6 +314,7 @@ def request(_client_socket:socket, website):
                                 is_chunk = True
                                 response = b''
                                 header = b''
+                                isBot = False
                                 while True:
                                     # Receive the encrypted data from the web server
                                     try:
@@ -330,8 +331,8 @@ def request(_client_socket:socket, website):
                                         print(f'Réponse vide[{host_web}]')                                  
                                         break
 
-
-                                    if b'Content' in fragment :#-----fragment voalohany indrindra-------
+                                    
+                                    if b'Content' in fragment or b'HTTP' in fragment :#-----fragment voalohany indrindra-------
                                         if b'chunked' not in fragment:
                                             total_content_length = content_length_ssl_data(fragment) 
                                             is_chunk = False        
@@ -347,7 +348,7 @@ def request(_client_socket:socket, website):
                                     if not is_chunk:
                                         response += fragment
 
-                                        
+                                      
                                     #------------Sending the data to the client socket(browser)-------------                                    
                                     try:
                                         if not is_chunk and len(response) >= total_content_length + length_header:
@@ -382,7 +383,7 @@ def start(website):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
         server.bind((host,port))
-        server.listen(15)
+        server.listen(30)
         website = ' '.join(website) 
         print('[SERVER]  The server is on...')
         
