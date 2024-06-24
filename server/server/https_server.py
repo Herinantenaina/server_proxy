@@ -259,7 +259,6 @@ def request(_client_socket:socket, website):
 
                     # Filtre
                     if str(host_web) not in blocked and host_web != None and 'ads' not in str(host_web) and 'doubleclick' not in str(host_web):   
-                    # if 'paint' in host_web: 
                         print('NetShield se connecte à', host_web)
                         
                         #---------Ajout du site web dans le certficat ssl si il n'y est pas--------
@@ -314,7 +313,7 @@ def request(_client_socket:socket, website):
                                 secure_web.sendall(request)
 
 
-                                secure_web.settimeout(10)
+                                secure_web.settimeout(5)
                                 is_chunk = True
                                 response = b''
                                 header = b''
@@ -346,16 +345,11 @@ def request(_client_socket:socket, website):
         
                                     if isBot:#----si la requete est effectuée par un bot
                                         break    
-
-                                    if not is_chunk:
-                                        response += fragment
-
                                       
                                     #------------Envoi des data vers le client socket-------------                                    
                                     try:
                                         if not is_chunk:
                                             client_socket.sendall(fragment)
-                                    
                                              
                                         elif is_chunk:
                                             client_socket.sendall(fragment)
@@ -364,7 +358,8 @@ def request(_client_socket:socket, website):
                                     except ConnectionError as e:
                                         print('[Erreur de connexion]',e )
                                     except Exception as e:
-                                        print(f'------{e}:{host_web}+++++++') 
+                                        if '2427' in str(e): pass # Erreur lors de la négociation
+                                        if 'bad length' in str(e): pass # Erreur lors de la négociation
 
                                 web.close()
                                 suppression_doublon(str(host_web))
@@ -373,9 +368,9 @@ def request(_client_socket:socket, website):
                     break
                 
             except WindowsError as e:
-                print('[Windows error]',e)
+                print('[ERREUR] Windows erreur',e)
             finally: 
-                _client_socket.close()
+                _client_socket.close() 
     else:
         _client_socket.close()
 
