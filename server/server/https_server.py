@@ -8,6 +8,7 @@ import os
 import re
 import time
 import json
+import sys
 # from concurrent.futures import ThreadPoolExecutor
 
 #----------Web context-----------
@@ -19,13 +20,17 @@ host = '127.0.0.1'
 port = 443
 
 # Liste des sites web
-qwebsite = ['font.googleapis.com','longdogechallenge.com', 'www.googletagmanager.com', 'optical.toys', 'theuselessweb.com', 'paint.toys', 'example.com', 'puginarug.com']
-website = ['www.googletagmanager.com','securepubads.g.doubleclick.net' ,'adsense.google.com', 'www.media.net', 'advertising.amazon.com', 'www.taboola.com', 'www.outbrain.com',]
+blocked = ['www.googletagmanager.com','ad-delivery.net','faucetfoot.com','merequartz.com','track.offercheck24.com','securepubads.g.doubleclick.net' ,'adsense.google.com', 'www.media.net', 'advertising.amazon.com', 'www.taboola.com', 'www.outbrain.com',]
 
 #--------Pour éviter l'ecriture simultanée d'un fichier par les differents thread
 file_lock = threading.Lock()
 
-#-------------Searching the openssl.exe directory------------
+#-------------Ajout python dans path-----------
+python_exe = sys.executable
+python_path = os.path.dirname(python_exe)
+os.environ['PATH'] += os.pathsep + python_path 
+
+#-------------Recherche du openssl.exe------------
 def openssl_path():
     for root, _, files in os.walk(os.environ["ProgramFiles"]):
         if "openssl.exe" in files:
@@ -33,7 +38,7 @@ def openssl_path():
             path = path.split('\\openssl.exe')
             return path[0]
             
-    raise FileNotFoundError("OpenSSL n'existe sur se système")
+    raise FileNotFoundError("OpenSSL n'existe pas sur se système")
 
 def extract_port_host_method_request(message:bytes):
     try:
@@ -124,16 +129,17 @@ def modification_du_derniere_ligne():
                         file.write(line.decode('utf-8'))
                     k += 1
 
-#------------Modification du ssl certificate si le website n'est pas encore enregistré dans le certificat----------
-def ssl_modification(host_web):
+#---Création du ssl certificate et ajout du site web ---
+#---si le website n'est pas encore enregistré dans le certificat---
+def ssl_modification(site_web):
     with file_lock:
         found = False
-        if host_web not in open('extfile.cnf', 'r').read():
+        if site_web not in open('extfile.cnf', 'r').read():
             with open('extfile.cnf', 'r') as extfile:
                 lines = extfile.read()
                 numberOfLines = len(lines.splitlines()) + 1
             with open('extfile.cnf', 'a') as extfile:
-                extfile.write(f'\nDNS.{numberOfLines - 4} = {host_web}')
+                extfile.write(f'\nDNS.{numberOfLines - 4} = {site_web}')
             found = True
         
         if found:
@@ -144,16 +150,16 @@ def ssl_modification(host_web):
 
             try:
                 subprocess.run(command, check=True)
-                print('ssl cerfitication changed')
+                print('Changement du certificat effectué')
             except Exception as e:
                 print('[ERREUR LORS DU MODIFICATION DU SSL CERTIFICAT]',e)
 
-#------------Stopping the server manually-----------------
+#------------Arrêt du serveur manuellement-----------------
 def signal_handler(signal, frame):
     print('[SERVER] Stopping the server...')
     exit(0)
 
-#------------Creation of the client context-------------
+#------------Créatin du context client-------------
 def _context():
     context_client = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context_client.load_cert_chain(certfile='cert.pem', keyfile='key.pem')
@@ -163,49 +169,14 @@ def _context():
     context_client.set_ciphers('ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:AES-CBC:')
     return context_client
 
-#-------Maka content length à chaque sendall()--------
-def actual_contentLenght(fragment:bytes,first_fragment:bool):
-    if first_fragment:
-        try:
-            fragment.decode('utf-8')
-            return 0
-        except:
-            pos = fragment.find(b'\r\n')
-            not_ssl = fragment[0:pos]
-            length = len(fragment) - len(not_ssl) - 4
- 
-        return length
-    else:
-        return len(fragment)
-    
-#-----------Mitady content_length an ilay encrypted data-------------
-def content_length_ssl_data(fragment:bytes):
-    position1 = fragment.find(b'Content-Length: ')
-    position2 = fragment.find(b'Content-Type: ')
-    if position1 > position2:
-        position2 = position1 + position2
-        position1 = position2 - position1
-        position2 = position2 - position1 + 25
-    buffer = fragment[position1:position2]
-    buffer = buffer.decode('utf-8')
-    buffer = buffer.split(' ')
-    k = 0
-    for content in buffer:
-        k += 1
-    buffer = buffer[k-1]
-    try:
-        return int(buffer)
-    except:
-        return 0
-
-#---------Maka ab ilay header sy ilay data am ilay fragment indrindra--------
+#---------Extraction du header et le corps de la page--------
 def header_body(fragment:bytes):
     pos = fragment.find(b'\r\n\r\n')
     header = fragment[:pos + 4]
     fragment = fragment[pos + 4:]
     return header, fragment
 
-#---------Pour bloquer les bots--------
+#---------Pour bloquer les requêtes ne provenant pas de l'utilisateur--------
 def is_bot(header:bytes) -> bool:
     try:
         header = header.decode('utf-8')
@@ -226,17 +197,52 @@ def is_bot(header:bytes) -> bool:
             
             
     except Exception as e:
-        print('[Bots erreur]',e)
+        print('[ERREUR] La requête provient pas d"un utilisateur',e)
         return False 
+    
+#--------Modification du header pour plus de sécurité------
+def set_security(fragment:bytes) -> bytes:
+    if b'X-Frame-Options:' not in fragment:
+        pos = fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n') +1) + 1)
+        fragment = fragment[:pos] + b'\r\nX-Frame-Options: DENY' + fragment[pos:]
+    else:
+        fragment = fragment.decode('utf-8')
+        start = 'X-Frame-Options:'
+        end = '\r\n'
+        pattern = rf"{re.escape(start)}(.*?)({re.escape(end)})"
+        fragment = re.sub(pattern, rf"{start} DENY {end}", fragment)
+        fragment = fragment.encode()
+
+    if b'X-Content-Type-Options:' not in fragment:
+        pos = fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n') +1) +1) + 1)
+        fragment = fragment[:pos] + b'\r\nX-Content-Type-Options: nosniff' + fragment[pos:]
+    else:
+        fragment = fragment.decode('utf-8')
+        start = 'X-Content-Type-Options:'
+        end = '\r\n'
+        pattern = rf"{re.escape(start)}(.*?)({re.escape(end)})"
+        fragment = re.sub(pattern, rf"{start} nosniff {end}", fragment)
+        fragment = fragment.encode()
+
+    if b'X-XSS-Protection:' not in fragment:
+       pos = fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n') +1) +1) +1) + 1)
+       fragment = fragment[:pos] + b'\r\nX-XSS-Protection: 1; mode=block' + fragment[pos:]
+    else:
+        fragment = fragment.decode('utf-8')
+        start = 'X-XSS-Protection:'
+        end = '\r\n'
+        pattern = rf"{re.escape(start)}(.*?)({re.escape(end)})"
+        fragment = re.sub(pattern, rf"{start}  1; mode=block {end}", fragment)
+        fragment = fragment.encode()
+    return fragment
+
 #----------------------------------
 #---------Client handler-----------
 #----------------------------------
 def request(_client_socket:socket, website):
     if _client_socket.fileno() != -1:
-        # _client_socket.setblocking(False)
             try:
                 while True:
-                    #---------Tokony asina set timeout eto--------
                     try:
                         message = _client_socket.recv(1024)
                     except ConnectionError:
@@ -248,14 +254,15 @@ def request(_client_socket:socket, website):
                     if not message or len(message) <= 0:
                         break
                 
-                    #------Obtention du port, du methode et de l'adresse host------
+                    #------Obtention du nom du site web------
                     host_web =  extract_port_host_method_request(message)
-                    if str(host_web) not in website and host_web != None and 'ads' not in str(host_web):
-                    #if 'you' in str(host_web):    
-                        print('A client is connected:', host_web)
-                       
 
-                        #---------Check ra efa anaty ssl certificate ilay domain; sinon ajouter-na--------
+                    # Filtre
+                    if str(host_web) not in blocked and host_web != None and 'ads' not in str(host_web) and 'doubleclick' not in str(host_web):   
+                    # if 'paint' in host_web: 
+                        print('NetShield se connecte à', host_web)
+                        
+                        #---------Ajout du site web dans le certficat ssl si il n'y est pas--------
                         ssl_modification(host_web)
 
                         #---------Client context---------
@@ -268,6 +275,7 @@ def request(_client_socket:socket, website):
                                 # -----------------------------
                                 request = b''
                                 handshake_done = False
+                                
                                 #------Maka an le https request ------
                                 while True:
                                     try:
@@ -280,14 +288,13 @@ def request(_client_socket:socket, website):
                                         if b'\r\n\r\n' in data:
                                             break
                                         
-                                        #-----Handshake-----
+                                        #-----Négociation ssl/tsl-----
                                         if not handshake_done:
                                             try:
                                                 client_socket.do_handshake()
                                                 handshake_done = True
                                             except Exception as e:
                                                 print('[Handshake failed]:',e,f'[{host_web}]')
-                                                secure_web.close()
                                                 break
                                     except Exception as e:
                                         print("ERREUR LORS DE LA RECEPTION DE L'HTTPS REQUEST")
@@ -302,63 +309,58 @@ def request(_client_socket:socket, website):
                                         break
                                 except:
                                     break
-
+                                
                                 #----Send request to the web server----- 
                                 secure_web.sendall(request)
 
 
-                                secure_web.settimeout(5)
-                                t0 = time.time()
-                                total_content_length = 0
-                                length_header = 0
+                                secure_web.settimeout(10)
                                 is_chunk = True
                                 response = b''
                                 header = b''
                                 isBot = False
                                 while True:
-                                    # Receive the encrypted data from the web server
+                                    # Réception des données chiffrées provenant du serveur web
                                     try:
                                         fragment = secure_web.recv(8192)
                                     except socket.timeout:
-                                        print('Timeout')
                                         break
                                     except Exception:
                                         print('[ERREUR LORS DE LA RECETPION DES DATA]',e)
                                         break
                                         
-
-                                    if fragment is None or len(fragment) == 0 or not fragment or fragment == b'':#----- Si response est vide-----
-                                        print(f'Réponse vide[{host_web}]')                                  
+                                    #----- Si la response est vide ou rien est envoyé par le serveur web-----
+                                    if fragment is None or len(fragment) == 0 or not fragment or fragment == b'':                              
                                         break
 
-                                    
-                                    if b'Content' in fragment or b'HTTP' in fragment :#-----fragment voalohany indrindra-------
+                                    #----Modification des headers--------
+                                    if b'Content' in fragment or b'HTTP' in fragment :
                                         if b'chunked' not in fragment:
-                                            total_content_length = content_length_ssl_data(fragment) 
                                             is_chunk = False        
                                         header,fragment = header_body(fragment)
+                                        if b'GET' in header:
+                                            header = set_security(header)
                                         isBot = is_bot(header)
-                                        length_header = len(header)
                                         fragment = header + fragment
                                         
         
-                                    if isBot:#----If bot is making the request but not a user
+                                    if isBot:#----si la requete est effectuée par un bot
                                         break    
 
                                     if not is_chunk:
                                         response += fragment
 
                                       
-                                    #------------Sending the data to the client socket(browser)-------------                                    
+                                    #------------Envoi des data vers le client socket-------------                                    
                                     try:
-                                        if not is_chunk and len(response) >= total_content_length + length_header:
-                                            response += (b'\r\n\r\n' )
-                                            client_socket.sendall(response)
+                                        if not is_chunk:
+                                            client_socket.sendall(fragment)
                                     
-                                            break  
+                                             
                                         elif is_chunk:
                                             client_socket.sendall(fragment)
                                             
+
                                     except ConnectionError as e:
                                         print('[Erreur de connexion]',e )
                                     except Exception as e:
@@ -367,7 +369,7 @@ def request(_client_socket:socket, website):
                                 web.close()
                                 suppression_doublon(str(host_web))
                                 modification_du_derniere_ligne()
-                                
+
                     break
                 
             except WindowsError as e:
@@ -378,25 +380,24 @@ def request(_client_socket:socket, website):
         _client_socket.close()
 
 
-#-------------Starting proxy------------------
-def start(website):
+#-------------Serveur proxy------------------
+def start(blocked):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
         server.bind((host,port))
         server.listen(30)
-        website = ' '.join(website) 
-        print('[SERVER]  The server is on...')
+        blocked = ' '.join(blocked) 
+        print('[SERVEUR]  Le serveur est lancé...')
         
         while True: 
             try:
                 _client_socket, client_addr = server.accept()
-        
                 signal.signal(signal.SIGINT, signal_handler)
-                thread_ = threading.Thread(target=request, args=(_client_socket, website), daemon=False)
+                thread_ = threading.Thread(target=request, args=(_client_socket, blocked), daemon=False)
                 thread_.start()                                      
 
             except ConnectionResetError:
-                print("[ERROR] Connection reset")
+                print("[ERROR] ERREUR DE CONNEXION")
                 _client_socket.close()
             except OSError as e :
                 _client_socket.close()
@@ -405,10 +406,11 @@ def start(website):
                 print('[EXCEPTION LORS DU DEMARAGE]',e)
                 _client_socket.close()
             except KeyboardInterrupt:
-                print('[SERVER] The server is stopping...')
+                print('[SERVER] Arrêt du serveur...')
                 _client_socket.close()
                 exit(0)
 
+#----------Lancement du seveur--------------
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
-    start(website)
+    start(blocked)
