@@ -20,6 +20,9 @@ host = '127.0.0.1'
 port = 443
 
 # Liste des sites web
+with open('sites_bloqués.txt', 'r') as file:
+    site_bloque = file.readlines()
+
 blocked = ['www.googletagmanager.com','ad-delivery.net','faucetfoot.com','merequartz.com','track.offercheck24.com','securepubads.g.doubleclick.net' ,'adsense.google.com', 'www.media.net', 'advertising.amazon.com', 'www.taboola.com', 'www.outbrain.com',]
 
 #--------Pour éviter l'ecriture simultanée d'un fichier par les differents thread
@@ -95,6 +98,7 @@ def suppression_doublon(host_web):
 #-------------Modification du extfile pour le ssl certificat------------
 def modification_du_derniere_ligne():
         with file_lock:
+            # Récupération des données du fichier
             with open('extfile.cnf', 'r') as file:
                 lines = file.readlines()
                 
@@ -170,11 +174,11 @@ def _context():
     return context_client
 
 #---------Extraction du header et le corps de la page--------
-def header_body(fragment:bytes):
-    pos = fragment.find(b'\r\n\r\n')
-    header = fragment[:pos + 4]
-    fragment = fragment[pos + 4:]
-    return header, fragment
+def header_body(body:bytes):
+    pos = body.find(b'\r\n\r\n')
+    header = body[:pos + 4]
+    body = body[pos + 4:]
+    return header, body
 
 #---------Pour bloquer les requêtes ne provenant pas de l'utilisateur--------
 def is_bot(header:bytes) -> bool:
@@ -201,40 +205,40 @@ def is_bot(header:bytes) -> bool:
         return False 
     
 #--------Modification du header pour plus de sécurité------
-def set_security(fragment:bytes) -> bytes:
-    if b'X-Frame-Options:' not in fragment:
-        pos = fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n') +1) + 1)
-        fragment = fragment[:pos] + b'\r\nX-Frame-Options: DENY' + fragment[pos:]
+def set_security(body:bytes) -> bytes:
+    if b'X-Frame-Options:' not in body:
+        pos = body.find(b'\r\n', body.find(b'\r\n') + 1)
+        body = body[:pos] + b'\r\nX-Frame-Options: DENY' + body[pos:]
     else:
-        fragment = fragment.decode('utf-8')
+        body = body.decode('utf-8')
         start = 'X-Frame-Options:'
         end = '\r\n'
         pattern = rf"{re.escape(start)}(.*?)({re.escape(end)})"
-        fragment = re.sub(pattern, rf"{start} DENY {end}", fragment)
-        fragment = fragment.encode()
+        body = re.sub(pattern, rf"{start} DENY {end}", body)
+        body = body.encode()
 
-    if b'X-Content-Type-Options:' not in fragment:
-        pos = fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n') +1) +1) + 1)
-        fragment = fragment[:pos] + b'\r\nX-Content-Type-Options: nosniff' + fragment[pos:]
+    if b'X-Content-Type-Options:' not in body:
+        pos = body.find(b'\r\n', body.find(b'\r\n', body.find(b'\r\n', body.find(b'\r\n') +1) +1) + 1)
+        body = body[:pos] + b'\r\nX-Content-Type-Options: nosniff' + body[pos:]
     else:
-        fragment = fragment.decode('utf-8')
+        body = body.decode('utf-8')
         start = 'X-Content-Type-Options:'
         end = '\r\n'
         pattern = rf"{re.escape(start)}(.*?)({re.escape(end)})"
-        fragment = re.sub(pattern, rf"{start} nosniff {end}", fragment)
-        fragment = fragment.encode()
+        body = re.sub(pattern, rf"{start} nosniff {end}", body)
+        body = body.encode()
 
-    if b'X-XSS-Protection:' not in fragment:
-       pos = fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n', fragment.find(b'\r\n') +1) +1) +1) + 1)
-       fragment = fragment[:pos] + b'\r\nX-XSS-Protection: 1; mode=block' + fragment[pos:]
+    if b'X-XSS-Protection:' not in body:
+       pos = body.find(b'\r\n', body.find(b'\r\n', body.find(b'\r\n', body.find(b'\r\n', body.find(b'\r\n') +1) +1) +1) + 1)
+       body = body[:pos] + b'\r\nX-XSS-Protection: 1; mode=block' + body[pos:]
     else:
-        fragment = fragment.decode('utf-8')
+        body = body.decode('utf-8')
         start = 'X-XSS-Protection:'
         end = '\r\n'
         pattern = rf"{re.escape(start)}(.*?)({re.escape(end)})"
-        fragment = re.sub(pattern, rf"{start}  1; mode=block {end}", fragment)
-        fragment = fragment.encode()
-    return fragment
+        body = re.sub(pattern, rf"{start}  1; mode=block {end}", body)
+        body = body.encode()
+    return body
 
 #----------------------------------
 #---------Client handler-----------
@@ -258,7 +262,10 @@ def request(_client_socket:socket, website):
                     host_web =  extract_port_host_method_request(message)
 
                     # Filtre
-                    if str(host_web) not in blocked and host_web != None and 'ads' not in str(host_web) and 'doubleclick' not in str(host_web):   
+                    if str(host_web) not in blocked and host_web != None and 'ads' not in str(host_web) and 'doubleclick' not in str(host_web): 
+                        for content in  site_bloque:
+                            if content in str(host_web): break  
+                            
                         print('NetShield se connecte à', host_web)
                         
                         #---------Ajout du site web dans le certficat ssl si il n'y est pas--------
@@ -309,19 +316,16 @@ def request(_client_socket:socket, website):
                                 except:
                                     break
                                 
-                                #----Send request to the web server----- 
+                                #Envoi de la requete à l'aide de la communication sécurisée
                                 secure_web.sendall(request)
 
-
-                                secure_web.settimeout(5)
-                                is_chunk = True
-                                response = b''
+                                secure_web.settimeout(5)        
                                 header = b''
-                                isBot = False
+                                isBot = True
                                 while True:
                                     # Réception des données chiffrées provenant du serveur web
                                     try:
-                                        fragment = secure_web.recv(8192)
+                                        body = secure_web.recv(8192)
                                     except socket.timeout:
                                         break
                                     except Exception:
@@ -329,37 +333,30 @@ def request(_client_socket:socket, website):
                                         break
                                         
                                     #----- Si la response est vide ou rien est envoyé par le serveur web-----
-                                    if fragment is None or len(fragment) == 0 or not fragment or fragment == b'':                              
+                                    if body is None or len(body) == 0 or not body or body == b'':                              
                                         break
 
-                                    #----Modification des headers--------
-                                    if b'Content' in fragment or b'HTTP' in fragment :
-                                        if b'chunked' not in fragment:
-                                            is_chunk = False        
-                                        header,fragment = header_body(fragment)
+                                    #----Modification des headers et filtrage des bots--------
+                                    if b'Content' in body or b'HTTP' in body :        
+                                        header,body = header_body(body)
                                         if b'GET' in header:
                                             header = set_security(header)
                                         isBot = is_bot(header)
-                                        fragment = header + fragment
-                                        
-        
+                                        body = header + body
+                                     
                                     if isBot:#----si la requete est effectuée par un bot
                                         break    
-                                      
+                                    
                                     #------------Envoi des data vers le client socket-------------                                    
                                     try:
-                                        if not is_chunk:
-                                            client_socket.sendall(fragment)
-                                             
-                                        elif is_chunk:
-                                            client_socket.sendall(fragment)
-                                            
-
+                                            client_socket.sendall(body)       
                                     except ConnectionError as e:
                                         print('[Erreur de connexion]',e )
                                     except Exception as e:
                                         if '2427' in str(e): pass # Erreur lors de la négociation
-                                        if 'bad length' in str(e): pass # Erreur lors de la négociation
+                                        elif 'bad length' in str(e): pass # Erreur lors de la négociation
+                                        else: print('[ERREUR] ',e)
+                                        break
 
                                 web.close()
                                 suppression_doublon(str(host_web))
@@ -388,7 +385,7 @@ def start(blocked):
             try:
                 _client_socket, client_addr = server.accept()
                 signal.signal(signal.SIGINT, signal_handler)
-                thread_ = threading.Thread(target=request, args=(_client_socket, blocked), daemon=False)
+                thread_ = threading.Thread(target=request, args=(_client_socket, blocked), daemon=True)
                 thread_.start()                                      
 
             except ConnectionResetError:
