@@ -24,7 +24,7 @@ with open('sites_bloqués.txt', 'r') as file:
     site_bloque = file.readlines()
 
 blocked = ['www.googletagmanager.com','ad-delivery.net','faucetfoot.com','merequartz.com','track.offercheck24.com','securepubads.g.doubleclick.net' ,'adsense.google.com', 'www.media.net', 'advertising.amazon.com', 'www.taboola.com', 'www.outbrain.com',]
-
+keywords = ['doubleclick', 'ads']
 #--------Pour éviter l'ecriture simultanée d'un fichier par les differents thread
 file_lock = threading.Lock()
 
@@ -262,9 +262,10 @@ def request(_client_socket:socket, website):
                     host_web =  extract_port_host_method_request(message)
 
                     # Filtre
-                    if str(host_web) not in blocked and host_web != None and 'ads' not in str(host_web) and 'doubleclick' not in str(host_web): 
-                        for content in  site_bloque:
-                            if content in str(host_web): break  
+                    if host_web != None and host_web not in blocked and host_web not in keywords: 
+                        for element in  site_bloque:
+                            if element in str(host_web): 
+                                break  
                             
                         print('NetShield se connecte à', host_web)
                         
@@ -333,7 +334,7 @@ def request(_client_socket:socket, website):
                                         break
                                         
                                     #----- Si la response est vide ou rien est envoyé par le serveur web-----
-                                    if body is None or len(body) == 0 or not body or body == b'':                              
+                                    if body is None or len(body) == 0:                              
                                         break
 
                                     #----Modification des headers et filtrage des bots--------
@@ -349,7 +350,7 @@ def request(_client_socket:socket, website):
                                     
                                     #------------Envoi des data vers le client socket-------------                                    
                                     try:
-                                            client_socket.sendall(body)       
+                                            client_socket.send(body)       
                                     except ConnectionError as e:
                                         print('[Erreur de connexion]',e )
                                     except Exception as e:
