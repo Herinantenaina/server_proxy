@@ -19,12 +19,20 @@ context_web.load_verify_locations('ca.pem', certifi.where())
 host = '127.0.0.1'
 port = 443
 
-# Liste des sites web
+# Liste des sites web qui doivent être bloqués
 with open('sites_bloqués.txt', 'r') as file:
     site_bloque = file.readlines()
+    i = 0
+    for el in site_bloque:      
+        if '\n' in el:
+            el = el.replace('\n', '')
+            site_bloque[i] = el
+            el = el.encode('utf-8')
+        i += 1
 
-blocked = ['www.googletagmanager.com','ad-delivery.net','faucetfoot.com','merequartz.com','track.offercheck24.com','securepubads.g.doubleclick.net' ,'adsense.google.com', 'www.media.net', 'advertising.amazon.com', 'www.taboola.com', 'www.outbrain.com',]
-keywords = ['doubleclick', 'ads']
+blocked = ['www.googletagmanager.com','ad-delivery.net','faucetfoot.com','merequartz.com','track.offercheck24.com','adsense.google.com', 'www.media.net', 'advertising.amazon.com', 'www.taboola.com', 'www.outbrain.com',]
+keywords =  ['doubleclick', 'ads', 'oneclick' ]
+
 #--------Pour éviter l'ecriture simultanée d'un fichier par les differents thread
 file_lock = threading.Lock()
 
@@ -154,7 +162,7 @@ def ssl_modification(site_web):
 
             try:
                 subprocess.run(command, check=True)
-                print('Changement du certificat effectué')
+                
             except Exception as e:
                 print('[ERREUR LORS DU MODIFICATION DU SSL CERTIFICAT]',e)
 
@@ -181,7 +189,7 @@ def header_body(body:bytes):
     return header, body
 
 #---------Pour bloquer les requêtes ne provenant pas de l'utilisateur--------
-def is_bot(header:bytes) -> bool:
+def is_bot(header:bytes, host_web) -> bool:
     try:
         header = header.decode('utf-8')
         header = header.split('\r\n')
@@ -192,17 +200,53 @@ def is_bot(header:bytes) -> bool:
 
                 with open('user-agent.json', 'r') as file:
                     data = json.load(file)        
-
-                for content in data:
-                    if re.search(content['pattern'], user_agent):
-                        return True
-                    else: 
-                        return False
-            
+                
+                    for content in data:
+                        if re.search(content['pattern'], user_agent):
+                            return True
+        return False
             
     except Exception as e:
-        print('[ERREUR] La requête provient pas d"un utilisateur',e)
+        print(f'Requête bloquée [{host_web}]',e)
         return False 
+
+#---------Pour bloquer les scams et autres attaques-------- 
+def find_scam(website, host_web):
+    low  = 0
+    high = len(website) - 1
+    host_web += '\n'
+    length = len(host_web)
+
+    # First, find the first index where word length >= length
+    while low <= high:
+        mid = (low + high) // 2
+        if len(website[mid]) < length:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    # Now, low should be at the start of the words with the desired length
+    start_index = low
+
+    # Find the end index of words with the desired length
+    high = len(website) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if len(website[mid]) > length:
+            high = mid - 1
+        else:
+            low = mid + 1
+
+    end_index = high
+
+    if start_index <= end_index and start_index < len(website) and end_index >= 0:
+        websites = website[start_index:end_index + 1]
+        for el in websites:
+            if host_web == el :
+                print(f'Requête bloquée {host_web}')
+                return True
+    else:
+        return False
     
 #--------Modification du header pour plus de sécurité------
 def set_security(body:bytes) -> bytes:
@@ -240,10 +284,26 @@ def set_security(body:bytes) -> bytes:
         body = body.encode()
     return body
 
+def extract_content_length(fragment:bytes):
+    if b'Content-Length' in fragment:
+        fragment = fragment.decode('utf-8', errors='ignore')
+    
+        pattern = r'Content-Length:\s*(\d+)'
+    
+        # Recherche la valeur de content-length
+        resultat = re.search(pattern, fragment, re.IGNORECASE)
+
+        if resultat:
+            content_length = int(resultat.group(1))
+            return content_length
+        else:
+            return None
+
+    
 #----------------------------------
 #---------Client handler-----------
 #----------------------------------
-def request(_client_socket:socket, website):
+def request(_client_socket:socket.socket, website):
     if _client_socket.fileno() != -1:
             try:
                 while True:
@@ -262,12 +322,18 @@ def request(_client_socket:socket, website):
                     host_web =  extract_port_host_method_request(message)
 
                     # Filtre
-                    if host_web != None and host_web not in blocked and host_web not in keywords: 
+                    # if host_web != None and host not in blocked: 
+                    if host_web != None and 'freedownload' in host_web:
                         for element in  site_bloque:
-                            if element in str(host_web): 
+                            if element in host_web : 
+                                print(f'Requête bloquée [{host_web}]')
                                 break  
-                            
-                        print('NetShield se connecte à', host_web)
+                        
+                        for element in keywords:
+                            if element in host_web:
+                                print(f'Requête bloquée [{host_web}]')
+                                break
+        
                         
                         #---------Ajout du site web dans le certficat ssl si il n'y est pas--------
                         ssl_modification(host_web)
@@ -283,16 +349,17 @@ def request(_client_socket:socket, website):
                                 request = b''
                                 handshake_done = False
                                 
-                                #------Maka an le https request ------
+                                #------Réception d'une nouvelle requête après------ 
+                                # -----la creation du tunnel de communication------
                                 while True:
                                     try:
-                                        data = client_socket.recv(1024)
-                                        if data:
-                                            request += data
+                                        chunk = client_socket.recv(1024)
+                                        if chunk:
+                                            request += chunk
                                         else :
                                             break
 
-                                        if b'\r\n\r\n' in data:
+                                        if b'\r\n\r\n' in chunk:
                                             break
                                         
                                         #-----Négociation ssl/tsl-----
@@ -308,63 +375,87 @@ def request(_client_socket:socket, website):
                                         secure_web.close()
                                         break
                                 
-                                try: #Check if the request is empty
-                                    if request == b'' or not request or request == None or len(request) <= 0:
-                                        client_socket.shutdown(socket.SHUT_WR)  
-                                        client_socket.close()
-                                        secure_web.close()
-                                        break
-                                except:
+                                #Check if the request is empty
+                                if request == b'' or not request or request == None or len(request) <= 0:
+                                    client_socket.shutdown(socket.SHUT_WR)  
+                                    client_socket.close()
+                                    secure_web.close()
                                     break
+                                
+                                #si la requete est effectuée par un bot
+                                
+                                isBot = is_bot(request, host_web)
+                                if isBot:
+                                        print(f'Requête bloquée [{host_web}]')
+                                        break
                                 
                                 #Envoi de la requete à l'aide de la communication sécurisée
                                 secure_web.sendall(request)
 
-                                secure_web.settimeout(5)        
+                                secure_web.settimeout(2)        
                                 header = b''
                                 isBot = True
+                                body = b''
+                                state = True
+                                actual_length = 50
                                 while True:
                                     # Réception des données chiffrées provenant du serveur web
                                     try:
-                                        body = secure_web.recv(8192)
+                                        body_part = secure_web.recv(4096)
+                                        
+                                        if body_part:
+                                            body += body_part
+
+                                            if not state:
+                                                actual_length += len(body_part)
+
+                                                try:
+                                                    if actual_length >= lenght_total:
+                                                        break
+                                                except:
+                                                    break
+
+                                            #----Modification des headers et filtrage des bots--------
+                                            if state and b'Content-Length' in body :        
+                                                header,body = header_body(body)
+                                                actual_length = len(body)
+                                                lenght_total = extract_content_length(header)
+                                                if b'200' in header:
+                                                    header = set_security(header)
+                                                body = header + body
+                                                state = False
+                                                        
+                                        else:          
+                                            break 
                                     except socket.timeout:
                                         break
-                                    except Exception:
+                                    except Exception as e:
                                         print('[ERREUR LORS DE LA RECETPION DES DATA]',e)
                                         break
-                                        
-                                    #----- Si la response est vide ou rien est envoyé par le serveur web-----
-                                    if body is None or len(body) == 0:                              
-                                        break
-
-                                    #----Modification des headers et filtrage des bots--------
-                                    if b'Content' in body or b'HTTP' in body :        
-                                        header,body = header_body(body)
-                                        if b'GET' in header:
-                                            header = set_security(header)
-                                        isBot = is_bot(header)
-                                        body = header + body
-                                     
-                                    if isBot:#----si la requete est effectuée par un bot
-                                        break    
                                     
-                                    #------------Envoi des data vers le client socket-------------                                    
-                                    try:
-                                            client_socket.send(body)       
-                                    except ConnectionError as e:
-                                        print('[Erreur de connexion]',e )
-                                    except Exception as e:
-                                        if '2427' in str(e): pass # Erreur lors de la négociation
-                                        elif 'bad length' in str(e): pass # Erreur lors de la négociation
-                                        else: print('[ERREUR] ',e)
-                                        break
+                                # print(body)
+                                #----- Si la response est vide ou rien est envoyé par le serveur web-----
+                                if body is None or len(body) == 0:                              
+                                    break
 
-                                web.close()
-                                suppression_doublon(str(host_web))
-                                modification_du_derniere_ligne()
+                                      
+                                #------------Envoi des data vers le client socket-------------                                    
+                                try:
+                                        client_socket.send(body)       
+                                except ConnectionError as e:
+                                    print('[Erreur de connexion]',e )
+                                except Exception as e:
+                                    if '2427' in str(e): pass # Erreur lors de la négociation
+                                    elif 'bad length' in str(e): pass # Erreur lors de la négociation
+                                    else: print('[ERREUR] ',e,f' [{host_web}]')
+                                    break
+
+                            web.close()
+                            suppression_doublon(str(host_web))
+                            modification_du_derniere_ligne()
 
                     break
-                
+
             except WindowsError as e:
                 print('[ERREUR] Windows erreur',e)
             finally: 
@@ -395,13 +486,13 @@ def start(blocked):
             except OSError as e :
                 _client_socket.close()
                 raise
-            except Exception as e:
-                print('[EXCEPTION LORS DU DEMARAGE]',e)
-                _client_socket.close()
             except KeyboardInterrupt:
                 print('[SERVER] Arrêt du serveur...')
                 _client_socket.close()
                 exit(0)
+            except Exception as e:
+                print('[EXCEPTION LORS DU DEMARAGE]',e)
+                _client_socket.close()
 
 #----------Lancement du seveur--------------
 if __name__ == '__main__':
